@@ -4,11 +4,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy import stats
 
-# Use a non-GUI backend for Matplotlib
 plt.switch_backend("Agg")
 
 ###############################################################################
-#                     HELPER FUNCTIONS
+#                           HELPER FUNCTIONS
 ###############################################################################
 
 def place_label(ax, label_positions, x, y, text, color='blue'):
@@ -27,21 +26,18 @@ def place_label(ax, label_positions, x, y, text, color='blue'):
     ax.text(final_x, final_y, text, color=color, ha="left", va="bottom", fontsize=8)
     label_positions.append((final_x, final_y))
 
-
 def highlight_html_cell(html_in, cell_id, color="red", border_px=2):
     """
-    Finds the <td> with id="cell_id" in html_in, and adds an inline style
-    for a colored border.
+    Finds the <td> with id="cell_id" and adds an inline style for a colored border.
     """
     marker = f'id="{cell_id}"'
     styled = f'id="{cell_id}" style="border: {border_px}px solid {color};"'
     return html_in.replace(marker, styled, 1)
 
-
 def show_html_table(html_content, height=400):
     """
-    Renders html_content inside a scrollable iframe so that the table
-    is displayed properly with all rows & columns.
+    Renders html_content inside a scrollable iframe so that 
+    the table is displayed properly with all rows & columns.
     """
     full_html = f"""
     <html>
@@ -53,47 +49,18 @@ def show_html_table(html_content, height=400):
     """
     components.html(full_html, height=height, scrolling=True)
 
-
 def next_step_button(step_key):
     """
     Displays a 'Next Step' button that increments st.session_state[step_key].
     """
-    if st.button("Next Step", key=step_key+"_btn"):
+    if st.button("Next Step", key=step_key + "_btn"):
         st.session_state[step_key] += 1
 
-
 ###############################################################################
-#                     DYNAMIC FIGURE SIZE FROM SIDEBAR
-###############################################################################
-
-def get_figure_size():
-    """
-    Returns (plot_width, plot_height) in inches, as chosen by user in sidebar.
-    """
-    # If they're not set, initialize them
-    if "plot_width" not in st.session_state:
-        st.session_state["plot_width"] = 8
-    if "plot_height" not in st.session_state:
-        st.session_state["plot_height"] = 4
-
-    # We'll read them from the sidebar. This way, each tab uses the same size.
-    st.sidebar.title("Plot Size Controls")
-    st.session_state["plot_width"] = st.sidebar.slider("Plot Width (inches)",
-                                                       min_value=4, max_value=20,
-                                                       value=st.session_state["plot_width"],
-                                                       step=1)
-    st.session_state["plot_height"] = st.sidebar.slider("Plot Height (inches)",
-                                                        min_value=2, max_value=10,
-                                                        value=st.session_state["plot_height"],
-                                                        step=1)
-    return (st.session_state["plot_width"], st.session_state["plot_height"])
-
-
-###############################################################################
-#                           1) T-DISTRIBUTION TAB
+#                      1) T-DISTRIBUTION TAB
 ###############################################################################
 
-def show_t_distribution_tab():
+def show_t_distribution_tab(plot_width, plot_height):
     st.subheader("t-Distribution")
 
     col1, col2 = st.columns(2)
@@ -105,8 +72,7 @@ def show_t_distribution_tab():
         tail_s = st.radio("Tail Type", ["one-tailed","two-tailed"], key="t_tab_tail")
 
     if st.button("Update Plot", key="t_tab_update"):
-        w,h = get_figure_size()
-        fig = plot_t_distribution(t_val, df_val, alpha_val, tail_s, w, h)
+        fig = plot_t_distribution(t_val, df_val, alpha_val, tail_s, plot_width, plot_height)
         st.pyplot(fig, use_container_width=True)
 
     with st.expander("Show Table Lookup (±5 around df)"):
@@ -114,41 +80,44 @@ def show_t_distribution_tab():
 
 
 def plot_t_distribution(t_val, df, alpha, tail_s, width, height):
-    fig, ax = plt.subplots(figsize=(width,height), dpi=100)
+    fig, ax = plt.subplots(figsize=(width, height), dpi=100)
     label_positions = []
 
-    x = np.linspace(-4,4,400)
+    x = np.linspace(-4, 4, 400)
     y = stats.t.pdf(x, df)
     ax.plot(x, y, color='black')
     ax.fill_between(x, y, color='lightgrey', alpha=0.2, label="Fail to Reject H₀")
 
-    if tail_s=="one-tailed":
-        t_crit= stats.t.ppf(1 - alpha, df)
-        ax.fill_between(x[x>=t_crit], y[x>=t_crit], color='red', alpha=0.3, label="Reject H₀")
+    if tail_s == "one-tailed":
+        t_crit = stats.t.ppf(1 - alpha, df)
+        ax.fill_between(x[x >= t_crit], y[x >= t_crit], color='red', alpha=0.3, label="Reject H₀")
         ax.axvline(t_crit, color='green', linestyle='--')
-        place_label(ax, label_positions, t_crit, stats.t.pdf(t_crit, df)+0.02, f"t_crit={t_crit:.3f}", 'green')
+        place_label(ax, label_positions, t_crit, stats.t.pdf(t_crit, df) + 0.02,
+                    f"t_crit={t_crit:.3f}", 'green')
         sig = (t_val > t_crit)
         final_crit = t_crit
     else:
         t_crit_r = stats.t.ppf(1 - alpha/2, df)
         t_crit_l = stats.t.ppf(alpha/2, df)
-        ax.fill_between(x[x>=t_crit_r], y[x>=t_crit_r], color='red', alpha=0.3)
-        ax.fill_between(x[x<=t_crit_l], y[x<=t_crit_l], color='red', alpha=0.3, label="Reject H₀")
+        ax.fill_between(x[x >= t_crit_r], y[x >= t_crit_r], color='red', alpha=0.3)
+        ax.fill_between(x[x <= t_crit_l], y[x <= t_crit_l], color='red', alpha=0.3, label="Reject H₀")
         ax.axvline(t_crit_r, color='green', linestyle='--')
         ax.axvline(t_crit_l, color='green', linestyle='--')
-        place_label(ax, label_positions, t_crit_r, stats.t.pdf(t_crit_r, df)+0.02, f"+t_crit={t_crit_r:.3f}", 'green')
-        place_label(ax, label_positions, t_crit_l, stats.t.pdf(t_crit_l, df)+0.02, f"-t_crit={t_crit_l:.3f}", 'green')
+        place_label(ax, label_positions, t_crit_r, stats.t.pdf(t_crit_r, df) + 0.02,
+                    f"+t_crit={t_crit_r:.3f}", 'green')
+        place_label(ax, label_positions, t_crit_l, stats.t.pdf(t_crit_l, df) + 0.02,
+                    f"-t_crit={t_crit_l:.3f}", 'green')
         sig = (abs(t_val) > abs(t_crit_r))
         final_crit = abs(t_crit_r)
 
     ax.axvline(t_val, color='blue', linestyle='--')
-    place_label(ax, label_positions, t_val, stats.t.pdf(t_val, df)+0.02, f"t_calc={t_val:.3f}", 'blue')
+    place_label(ax, label_positions, t_val, stats.t.pdf(t_val, df) + 0.02,
+                f"t_calc={t_val:.3f}", 'blue')
 
     if sig:
         msg = f"t={t_val:.3f} > {final_crit:.3f} => Reject H₀"
     else:
         msg = f"t={t_val:.3f} ≤ {final_crit:.3f} => Fail to Reject H₀"
-
     ax.set_title(f"t-Distribution (df={df})\n{msg}")
     ax.legend()
     fig.tight_layout()
@@ -163,11 +132,11 @@ def show_t_table_lookup(df_val, alpha_val, tail_s, key_prefix):
         st.session_state[step_key] = 0
     cur_step = st.session_state[step_key]
 
-    df_min= max(1, df_val-5)
-    df_max= df_val+5
-    df_list= list(range(df_min, df_max+1))
+    df_min = max(1, df_val - 5)
+    df_max = df_val + 5
+    df_list = list(range(df_min, df_max + 1))
 
-    columns= [
+    columns = [
         ("df",""),
         ("one",0.10), ("one",0.05), ("one",0.01), ("one",0.001),
         ("two",0.10), ("two",0.05), ("two",0.01), ("two",0.001),
@@ -175,11 +144,11 @@ def show_t_table_lookup(df_val, alpha_val, tail_s, key_prefix):
 
     def compute_tcrit(dof, mode, a_):
         if mode=="one":
-            return stats.t.ppf(1-a_, dof)
+            return stats.t.ppf(1 - a_, dof)
         else:
             return stats.t.ppf(1 - a_/2, dof)
 
-    table_html= """
+    table_html = """
     <style>
     table.ttable {
       border-collapse: collapse;
@@ -201,54 +170,58 @@ def show_t_table_lookup(df_val, alpha_val, tail_s, key_prefix):
       <tr>
         <th>df</th>
     """
-    for i,(m,a) in enumerate(columns[1:], start=1):
+    for i, (m, a) in enumerate(columns[1:], start=1):
         col_label = f"{m}_{a}"
         table_html += f"<th>{col_label}</th>"
     table_html += "</tr>\n"
 
     for dfv in df_list:
         table_html += "<tr>"
-        row_id= f"df_{dfv}_0"
+        row_id = f"df_{dfv}_0"
         table_html += f'<td id="{row_id}">{dfv}</td>'
-        for c_i,(m,a) in enumerate(columns[1:], start=1):
-            cell_id= f"df_{dfv}_{c_i}"
-            val= compute_tcrit(dfv, m, a)
+        for c_i, (m, a) in enumerate(columns[1:], start=1):
+            cell_id = f"df_{dfv}_{c_i}"
+            val = compute_tcrit(dfv, m, a)
             table_html += f'<td id="{cell_id}">{val:.3f}</td>'
         table_html += "</tr>\n"
     table_html += "</table>"
 
     user_mode = "one" if tail_s.startswith("one") else "two"
-    col_index= None
-    for i,(m,a) in enumerate(columns[1:], start=1):
-        if m==user_mode and abs(a - alpha_val)<1e-12:
-            col_index= i
+    col_index = None
+    for i, (m, a) in enumerate(columns[1:], start=1):
+        if m == user_mode and abs(a - alpha_val) < 1e-12:
+            col_index = i
             break
 
     row_in = (df_val in df_list)
 
-    if cur_step>=0 and row_in:
+    # Step logic: 0 => row highlight, 1 => column highlight, 2 => intersection
+    if cur_step >= 0 and row_in:
         for cc in range(len(columns)):
-            table_html= highlight_html_cell(table_html, f"df_{df_val}_{cc}", "red", 2)
-    if cur_step>=1 and col_index is not None:
-        for dv_ in df_list:
-            table_html= highlight_html_cell(table_html, f"df_{dv_}_{col_index}", "red", 2)
-    if cur_step>=2 and row_in and col_index is not None:
-        table_html= highlight_html_cell(table_html, f"df_{df_val}_{col_index}", "blue", 3)
+            table_html = highlight_html_cell(table_html, f"df_{df_val}_{cc}", "red", 2)
 
-    if cur_step>=3 and tail_s=="one-tailed" and abs(alpha_val-0.05)<1e-12:
-        alt_col= None
+    if cur_step >= 1 and col_index is not None:
+        for dv_ in df_list:
+            table_html = highlight_html_cell(table_html, f"df_{dv_}_{col_index}", "red", 2)
+
+    if cur_step >= 2 and row_in and col_index is not None:
+        table_html = highlight_html_cell(table_html, f"df_{df_val}_{col_index}", "blue", 3)
+
+    # Step 3 => if one-tail=0.05 => highlight two_0.10
+    if cur_step >= 3 and tail_s=="one-tailed" and abs(alpha_val - 0.05)<1e-12:
+        alt_col = None
         for i,(m,a) in enumerate(columns[1:], start=1):
             if m=="two" and abs(a-0.10)<1e-12:
                 alt_col= i
                 break
         if alt_col is not None and row_in:
             for dv_ in df_list:
-                table_html= highlight_html_cell(table_html, f"df_{dv_}_{alt_col}", "red",2)
+                table_html= highlight_html_cell(table_html, f"df_{dv_}_{alt_col}", "red", 2)
             table_html= highlight_html_cell(table_html, f"df_{df_val}_{alt_col}", "blue",3)
 
     show_html_table(table_html, height=450)
 
-    steps_list= [
+    steps_list = [
         f"1) Highlight row df={df_val}",
         f"2) Highlight column tail={tail_s}, α={alpha_val}",
         "3) Intersection => t_crit",
@@ -258,22 +231,21 @@ def show_t_table_lookup(df_val, alpha_val, tail_s, key_prefix):
         steps_list.pop()
 
     max_step = len(steps_list)-1
-    if cur_step>max_step:
+    if cur_step > max_step:
         st.write("All steps complete!")
     else:
         st.write(f"**Step {cur_step+1}**: {steps_list[cur_step]}")
 
     next_step_button(step_key)
 
-
 ###############################################################################
-#                      2) Z-DISTRIBUTION TAB
+#                    2) Z-DISTRIBUTION TAB
 ###############################################################################
 
-def show_z_distribution_tab():
+def show_z_distribution_tab(plot_width, plot_height):
     st.subheader("z-Distribution")
 
-    c1, c2= st.columns(2)
+    c1, c2 = st.columns(2)
     with c1:
         z_val= st.number_input("z statistic", value=1.64, key="z_tab_zval")
     with c2:
@@ -281,8 +253,7 @@ def show_z_distribution_tab():
         tail_s= st.radio("Tail Type", ["one-tailed","two-tailed"], key="z_tab_tail")
 
     if st.button("Update Plot", key="z_tab_update"):
-        w,h = get_figure_size()
-        fig= plot_z_distribution(z_val, alpha_val, tail_s, w, h)
+        fig= plot_z_distribution(z_val, alpha_val, tail_s, plot_width, plot_height)
         st.pyplot(fig, use_container_width=True)
 
     with st.expander("Show Table Lookup (±10 rows)"):
@@ -290,7 +261,7 @@ def show_z_distribution_tab():
 
 
 def plot_z_distribution(z_val, alpha, tail_s, width, height):
-    fig, ax= plt.subplots(figsize=(width,height), dpi=100)
+    fig, ax= plt.subplots(figsize=(width, height), dpi=100)
     label_positions=[]
     x= np.linspace(-4,4,400)
     y= stats.norm.pdf(x)
@@ -298,7 +269,7 @@ def plot_z_distribution(z_val, alpha, tail_s, width, height):
     ax.fill_between(x,y,color='lightgrey', alpha=0.2,label="Fail to Reject H₀")
 
     if tail_s=="one-tailed":
-        z_crit= stats.norm.ppf(1- alpha)
+        z_crit= stats.norm.ppf(1 - alpha)
         ax.fill_between(x[x>= z_crit], y[x>= z_crit], color='red', alpha=0.3, label="Reject H₀")
         ax.axvline(z_crit, color='green', linestyle='--')
         place_label(ax, label_positions, z_crit, stats.norm.pdf(z_crit), f"z_crit={z_crit:.3f}", 'green')
@@ -323,24 +294,22 @@ def plot_z_distribution(z_val, alpha, tail_s, width, height):
         msg= f"z={z_val:.3f} > {final_crit:.3f} => Reject H₀"
     else:
         msg= f"z={z_val:.3f} ≤ {final_crit:.3f} => Fail to Reject H₀"
-
     ax.set_title(f"Z-Distribution\n{msg}")
     ax.legend()
     fig.tight_layout()
     return fig
+
 
 def show_z_table_lookup(z_in, key_prefix):
     st.write("### Step-by-Step z-Table Lookup")
 
     step_key= key_prefix + "_table_step"
     if step_key not in st.session_state:
-        st.session_state[step_key]=0
-    cur_step= st.session_state[step_key]
+        st.session_state[step_key] = 0
+    cur_step = st.session_state[step_key]
 
-    if z_in<0:
-        z_in=0
-    if z_in>3.49:
-        z_in=3.49
+    if z_in<0: z_in=0
+    if z_in>3.49: z_in=3.49
 
     row_base= round(np.floor(z_in*10)/10,1)
     col_part= round(z_in - row_base,2)
@@ -350,8 +319,7 @@ def show_z_table_lookup(z_in, key_prefix):
         row_base= min(row_vals, key=lambda x:abs(x-row_base))
 
     row_idx= np.where(row_vals==row_base)[0]
-    if len(row_idx)==0:
-        row_idx= [0]
+    if len(row_idx)==0: row_idx=[0]
     row_idx= row_idx[0]
 
     row_start= max(0,row_idx-10)
@@ -404,8 +372,8 @@ def show_z_table_lookup(z_in, key_prefix):
 
     if cur_step>=0 and row_in:
         for cv in col_vals:
-            table_html= highlight_html_cell(table_html, f"z_{row_base:.1f}_{cv:.2f}", "red",2)
-        table_html= highlight_html_cell(table_html, f"z_{row_base:.1f}_0", "red",2)
+            table_html= highlight_html_cell(table_html, f"z_{row_base:.1f}_{cv:.2f}", "red", 2)
+        table_html= highlight_html_cell(table_html, f"z_{row_base:.1f}_0", "red", 2)
 
     if cur_step>=1 and col_in:
         for rv in sub_rows:
@@ -429,12 +397,11 @@ def show_z_table_lookup(z_in, key_prefix):
 
     next_step_button(step_key)
 
-
 ###############################################################################
-#                  3) F-DISTRIBUTION TAB
+#                    3) F-DISTRIBUTION TAB
 ###############################################################################
 
-def show_f_distribution_tab():
+def show_f_distribution_tab(plot_width, plot_height):
     st.subheader("F-Distribution (One-tailed)")
 
     c1, c2= st.columns(2)
@@ -446,8 +413,7 @@ def show_f_distribution_tab():
         alpha= st.number_input("Alpha", value=0.05, step=0.01, key="f_tab_alpha")
 
     if st.button("Update Plot", key="f_tab_update"):
-        w,h = get_figure_size()
-        fig= plot_f_distribution(f_val, df1, df2, alpha, w, h)
+        fig= plot_f_distribution(f_val, df1, df2, alpha, plot_width, plot_height)
         st.pyplot(fig, use_container_width=True)
 
     with st.expander("Show F Table Lookup (±5 around df1, df2)"):
@@ -488,7 +454,7 @@ def show_f_table_lookup(df1_u, df2_u, alpha, key_prefix):
 
     step_key= key_prefix + "_table_step"
     if step_key not in st.session_state:
-        st.session_state[step_key]=0
+        st.session_state[step_key] = 0
     cur_step= st.session_state[step_key]
 
     df1_min= max(1, df1_u-5)
@@ -566,12 +532,11 @@ def show_f_table_lookup(df1_u, df2_u, alpha, key_prefix):
 
     next_step_button(step_key)
 
-
 ###############################################################################
-#                   4) CHI-SQUARE TAB
+#                  4) CHI-SQUARE TAB
 ###############################################################################
 
-def show_chi_square_tab():
+def show_chi_square_tab(plot_width, plot_height):
     st.subheader("Chi-Square (One-tailed)")
 
     c1, c2= st.columns(2)
@@ -582,8 +547,7 @@ def show_chi_square_tab():
         alpha= st.number_input("Alpha", value=0.05, step=0.01, key="chi_tab_alpha")
 
     if st.button("Update Plot", key="chi_tab_update"):
-        w,h = get_figure_size()
-        fig= plot_chi_square(chi_val, df_val, alpha, w, h)
+        fig= plot_chi_square(chi_val, df_val, alpha, plot_width, plot_height)
         st.pyplot(fig, use_container_width=True)
 
     with st.expander("Show Chi-Square Table Lookup (±5 df)"):
@@ -617,7 +581,6 @@ def plot_chi_square(chi_val, df, alpha, width, height):
     ax.legend()
     fig.tight_layout()
     return fig
-
 
 def show_chi_table_lookup(df_val, alpha, key_prefix):
     st.write("### Step-by-Step Chi-Square Table Lookup")
@@ -702,12 +665,11 @@ def show_chi_table_lookup(df_val, alpha, key_prefix):
 
     next_step_button(step_key)
 
-
 ###############################################################################
-#                   5) MANN–WHITNEY U TAB
+#                  5) MANN–WHITNEY U TAB
 ###############################################################################
 
-def show_mann_whitney_tab():
+def show_mann_whitney_tab(plot_width, plot_height):
     st.subheader("Mann–Whitney U")
 
     c1, c2 = st.columns(2)
@@ -720,8 +682,7 @@ def show_mann_whitney_tab():
         tail_s= st.radio("Tail Type", ["one-tailed","two-tailed"], key="mw_tab_tail")
 
     if st.button("Update Plot", key="mw_tab_update"):
-        w,h = get_figure_size()
-        fig= plot_mann_whitney(U_val, n1, n2, alpha, tail_s, w, h)
+        fig= plot_mann_whitney(U_val, n1, n2, alpha, tail_s, plot_width, plot_height)
         st.pyplot(fig, use_container_width=True)
 
     with st.expander("Show Mann–Whitney U Table Lookup"):
@@ -738,7 +699,7 @@ def plot_mann_whitney(U_val, n1, n2, alpha, tail_s, width, height):
     x= np.linspace(-4,4,400)
     y= stats.norm.pdf(x)
     ax.plot(x,y,color='black')
-    ax.fill_between(x,y,color='lightgrey',alpha=0.2,label="Fail to Reject H₀")
+    ax.fill_between(x,y,color='lightgrey', alpha=0.2,label="Fail to Reject H₀")
 
     if tail_s=="one-tailed":
         zCrit= stats.norm.ppf(1- alpha)
@@ -767,10 +728,10 @@ def plot_mann_whitney(U_val, n1, n2, alpha, tail_s, width, height):
 
 
 ###############################################################################
-#                   6) WILCOXON SIGNED-RANK TAB
+#                  6) WILCOXON SIGNED-RANK TAB
 ###############################################################################
 
-def show_wilcoxon_tab():
+def show_wilcoxon_tab(plot_width, plot_height):
     st.subheader("Wilcoxon Signed-Rank")
 
     c1, c2= st.columns(2)
@@ -782,8 +743,7 @@ def show_wilcoxon_tab():
         tail_s= st.radio("Tail Type", ["one-tailed","two-tailed"], key="wil_tab_tail")
 
     if st.button("Update Plot", key="wil_tab_update"):
-        w,h = get_figure_size()
-        fig= plot_wilcoxon(T_val, N_val, alpha, tail_s, w, h)
+        fig= plot_wilcoxon(T_val, N_val, alpha, tail_s, plot_width, plot_height)
         st.pyplot(fig, use_container_width=True)
 
     with st.expander("Show Wilcoxon Table Lookup"):
@@ -830,10 +790,10 @@ def plot_wilcoxon(T_val, N, alpha, tail_s, width, height):
 
 
 ###############################################################################
-#                   7) BINOMIAL TAB
+#                  7) BINOMIAL TAB
 ###############################################################################
 
-def show_binomial_tab():
+def show_binomial_tab(plot_width, plot_height):
     st.subheader("Binomial")
 
     c1, c2= st.columns(2)
@@ -846,8 +806,7 @@ def show_binomial_tab():
         tail_s= st.radio("Tail Type", ["one-tailed","two-tailed"], key="bin_tab_tail")
 
     if st.button("Update Plot", key="bin_tab_update"):
-        w,h = get_figure_size()
-        fig= plot_binomial(n,x,p,alpha,tail_s, w, h)
+        fig= plot_binomial(n,x,p,alpha,tail_s, plot_width, plot_height)
         st.pyplot(fig, use_container_width=True)
 
     with st.expander("Show Binomial Table Lookup (±5 around n)"):
@@ -862,12 +821,12 @@ def plot_binomial(n,x,p,alpha,tail_s, width, height):
 
     mean_= n*p
     if tail_s=="one-tailed":
-        if x<=mean_:
+        if x<= mean_:
             p_val= stats.binom.cdf(x, n, p)
         else:
             p_val= 1- stats.binom.cdf(x-1, n, p)
     else:
-        if x<=mean_:
+        if x<= mean_:
             p_val= stats.binom.cdf(x, n, p)*2
         else:
             p_val= (1- stats.binom.cdf(x-1, n, p))*2
@@ -942,7 +901,7 @@ def show_binomial_table_lookup(n_val, alpha, tail_s, key_prefix):
             lo+=1
         hi= nn
         upper=1-cdf[hi-1] if hi>0 else 1
-        while hi>=0 and upper<half:
+        while hi>=0 and upper< half:
             hi-=1
             if hi>=0:
                 upper=1-cdf[hi]
@@ -1002,6 +961,7 @@ def show_binomial_table_lookup(n_val, alpha, tail_s, key_prefix):
         col_idx= None
         col_in= False
 
+    # steps: 0 => row n_val, 1 => column alpha, 2 => intersection
     if cur_step>=0 and row_in:
         for c_i in range(len(alpha_list)+1):
             table_html= highlight_html_cell(table_html, f"bin_{n_val}_{c_i}", "red",2)
@@ -1026,20 +986,36 @@ def show_binomial_table_lookup(n_val, alpha, tail_s, key_prefix):
 
     next_step_button(step_key)
 
-
 ###############################################################################
-#                                 MAIN
+#                                MAIN
 ###############################################################################
 
 def main():
-    st.set_page_config(page_title="PSYC250 - Full Stats Explorer (Adjustable Plots)",
-                       layout="wide")
+    st.set_page_config(
+        page_title="PSYC250 - Stats Explorer (No Duplicate Sliders)",
+        layout="wide"
+    )
 
-    # Force the creation of the slider for plot width/height
-    # so it's always visible on the sidebar
-    get_figure_size()
+    # Create 2 sliders in the sidebar, each with a unique key, used by all tabs
+    st.sidebar.title("Plot Size Controls")
+    plot_width = st.sidebar.slider(
+        "Plot Width (inches)",
+        min_value=4,
+        max_value=20,
+        value=8,
+        step=1,
+        key="plot_width_slider"
+    )
+    plot_height = st.sidebar.slider(
+        "Plot Height (inches)",
+        min_value=2,
+        max_value=10,
+        value=4,
+        step=1,
+        key="plot_height_slider"
+    )
 
-    st.title("PSYC250 - Statistical Tables Explorer (Adjustable Figure Size)")
+    st.title("PSYC250 - Statistical Tables Explorer (Adjustable Plots, No Duplicate Keys)")
 
     tabs= st.tabs([
         "t-Distribution",
@@ -1052,19 +1028,19 @@ def main():
     ])
 
     with tabs[0]:
-        show_t_distribution_tab()
+        show_t_distribution_tab(plot_width, plot_height)
     with tabs[1]:
-        show_z_distribution_tab()
+        show_z_distribution_tab(plot_width, plot_height)
     with tabs[2]:
-        show_f_distribution_tab()
+        show_f_distribution_tab(plot_width, plot_height)
     with tabs[3]:
-        show_chi_square_tab()
+        show_chi_square_tab(plot_width, plot_height)
     with tabs[4]:
-        show_mann_whitney_tab()
+        show_mann_whitney_tab(plot_width, plot_height)
     with tabs[5]:
-        show_wilcoxon_tab()
+        show_wilcoxon_tab(plot_width, plot_height)
     with tabs[6]:
-        show_binomial_tab()
+        show_binomial_tab(plot_width, plot_height)
 
 
 if __name__=="__main__":
