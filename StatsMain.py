@@ -4,16 +4,17 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy import stats
 
-plt.switch_backend("Agg")  # For non-GUI usage of Matplotlib
+# Use a non-GUI backend for Matplotlib
+plt.switch_backend("Agg")
 
 ###############################################################################
-#                           HELPER FUNCTIONS
+#                     HELPER FUNCTIONS
 ###############################################################################
 
 def place_label(ax, label_positions, x, y, text, color='blue'):
     """
     Places a text label on the Axes at (x, y), shifting if needed
-    to avoid overlapping other labels in label_positions.
+    to avoid overlapping previously placed labels.
     """
     offset_x = 0.0
     offset_y = 0.02
@@ -26,14 +27,16 @@ def place_label(ax, label_positions, x, y, text, color='blue'):
     ax.text(final_x, final_y, text, color=color, ha="left", va="bottom", fontsize=8)
     label_positions.append((final_x, final_y))
 
+
 def highlight_html_cell(html_in, cell_id, color="red", border_px=2):
     """
     Finds the <td> with id="cell_id" in html_in, and adds an inline style
-    for a colored border.
+    for a colored border. 
     """
     marker = f'id="{cell_id}"'
     styled = f'id="{cell_id}" style="border: {border_px}px solid {color};"'
     return html_in.replace(marker, styled, 1)
+
 
 def show_html_table(html_content, height=400):
     """
@@ -42,9 +45,7 @@ def show_html_table(html_content, height=400):
     """
     full_html = f"""
     <html>
-      <head>
-        <meta charset="UTF-8" />
-      </head>
+      <head><meta charset="UTF-8" /></head>
       <body>
         {html_content}
       </body>
@@ -52,12 +53,14 @@ def show_html_table(html_content, height=400):
     """
     components.html(full_html, height=height, scrolling=True)
 
+
 def next_step_button(step_key):
     """
     Displays a 'Next Step' button that increments st.session_state[step_key].
     """
     if st.button("Next Step", key=step_key+"_btn"):
         st.session_state[step_key] += 1
+
 
 ###############################################################################
 #                           1) T-DISTRIBUTION TAB
@@ -76,27 +79,29 @@ def show_t_distribution_tab():
 
     if st.button("Update Plot", key="t_tab_update"):
         fig = plot_t_distribution(t_val, df_val, alpha_val, tail_s)
-        st.pyplot(fig)
+        # Fill the container width
+        st.pyplot(fig, use_container_width=True)
 
     with st.expander("Show Table Lookup (±5 around df)"):
         show_t_table_lookup(df_val, alpha_val, tail_s, "t_tab")
 
 
 def plot_t_distribution(t_val, df, alpha, tail_s):
-    fig, ax = plt.subplots(figsize=(5,3))
+    # Larger figure, e.g. 8x4 inches
+    fig, ax = plt.subplots(figsize=(8,4), dpi=100)
     label_positions = []
 
     x = np.linspace(-4,4,400)
     y = stats.t.pdf(x, df)
-    ax.plot(x,y,color='black')
-    ax.fill_between(x,y,color='lightgrey', alpha=0.2, label="Fail to Reject H₀")
+    ax.plot(x, y, color='black')
+    ax.fill_between(x, y, color='lightgrey', alpha=0.2, label="Fail to Reject H₀")
 
     if tail_s=="one-tailed":
-        t_crit= stats.t.ppf(1-alpha, df)
+        t_crit= stats.t.ppf(1 - alpha, df)
         ax.fill_between(x[x>=t_crit], y[x>=t_crit], color='red', alpha=0.3, label="Reject H₀")
         ax.axvline(t_crit, color='green', linestyle='--')
         place_label(ax, label_positions, t_crit, stats.t.pdf(t_crit, df)+0.02, f"t_crit={t_crit:.3f}", 'green')
-        sig = (t_val> t_crit)
+        sig = (t_val > t_crit)
         final_crit = t_crit
     else:
         t_crit_r = stats.t.ppf(1 - alpha/2, df)
@@ -148,7 +153,6 @@ def show_t_table_lookup(df_val, alpha_val, tail_s, key_prefix):
         else:
             return stats.t.ppf(1 - a_/2, dof)
 
-    # Build the HTML for the table
     table_html= """
     <style>
     table.ttable {
@@ -217,12 +221,10 @@ def show_t_table_lookup(df_val, alpha_val, tail_s, key_prefix):
                 alt_col= i
                 break
         if alt_col is not None and row_in:
-            # highlight entire alt_col
             for dv_ in df_list:
                 table_html= highlight_html_cell(table_html, f"df_{dv_}_{alt_col}", "red",2)
             table_html= highlight_html_cell(table_html, f"df_{df_val}_{alt_col}", "blue",3)
 
-    # Show table via iframe
     show_html_table(table_html, height=450)
 
     # Steps text
@@ -232,7 +234,6 @@ def show_t_table_lookup(df_val, alpha_val, tail_s, key_prefix):
         "3) Intersection => t_crit",
         "4) If one-tailed α=0.05, also highlight two-tailed α=0.10"
     ]
-    # If not that special case, remove step 4
     if not (tail_s=="one-tailed" and abs(alpha_val-0.05)<1e-12):
         steps_list.pop()
 
@@ -246,7 +247,7 @@ def show_t_table_lookup(df_val, alpha_val, tail_s, key_prefix):
 
 
 ###############################################################################
-#                         2) Z-DISTRIBUTION TAB
+#                       2) Z-DISTRIBUTION TAB
 ###############################################################################
 
 def show_z_distribution_tab():
@@ -261,14 +262,14 @@ def show_z_distribution_tab():
 
     if st.button("Update Plot", key="z_tab_update"):
         fig= plot_z_distribution(z_val, alpha_val, tail_s)
-        st.pyplot(fig)
+        st.pyplot(fig, use_container_width=True)
 
     with st.expander("Show Table Lookup (±10 rows)"):
         show_z_table_lookup(z_val, "z_tab")
 
 
 def plot_z_distribution(z_val, alpha, tail_s):
-    fig, ax= plt.subplots(figsize=(5,3))
+    fig, ax= plt.subplots(figsize=(8,4), dpi=100)
     label_positions=[]
     x= np.linspace(-4,4,400)
     y= stats.norm.pdf(x)
@@ -277,7 +278,7 @@ def plot_z_distribution(z_val, alpha, tail_s):
 
     if tail_s=="one-tailed":
         z_crit= stats.norm.ppf(1- alpha)
-        ax.fill_between(x[x>=z_crit], y[x>=z_crit], color='red', alpha=0.3, label="Reject H₀")
+        ax.fill_between(x[x>= z_crit], y[x>= z_crit], color='red', alpha=0.3, label="Reject H₀")
         ax.axvline(z_crit, color='green', linestyle='--')
         place_label(ax, label_positions, z_crit, stats.norm.pdf(z_crit), f"z_crit={z_crit:.3f}", 'green')
         sig= (z_val> z_crit)
@@ -316,7 +317,7 @@ def show_z_table_lookup(z_in, key_prefix):
         st.session_state[step_key]=0
     cur_step= st.session_state[step_key]
 
-    if z_in<0: 
+    if z_in<0:
         z_in=0
     if z_in>3.49:
         z_in=3.49
@@ -324,13 +325,12 @@ def show_z_table_lookup(z_in, key_prefix):
     row_base= round(np.floor(z_in*10)/10,1)
     col_part= round(z_in - row_base,2)
 
-    # row values from 0.0..3.4 in steps of 0.1
     row_vals= np.round(np.arange(0,3.5,0.1),1)
     if row_base not in row_vals:
         row_base= min(row_vals, key=lambda x:abs(x-row_base))
 
     row_idx= np.where(row_vals==row_base)[0]
-    if len(row_idx)==0: 
+    if len(row_idx)==0:
         row_idx= [0]
     row_idx= row_idx[0]
 
@@ -342,7 +342,6 @@ def show_z_table_lookup(z_in, key_prefix):
     if col_part not in col_vals:
         col_part= min(col_vals, key=lambda x:abs(x-col_part))
 
-    # Build HTML
     table_html= """
     <style>
     table.ztable {
@@ -380,7 +379,6 @@ def show_z_table_lookup(z_in, key_prefix):
         table_html+= "</tr>\n"
     table_html+= "</table>"
 
-    # Step logic: 0 => row, 1 => col, 2 => intersection
     row_in= (row_base in sub_rows)
     col_in= (col_part in col_vals)
 
@@ -388,11 +386,9 @@ def show_z_table_lookup(z_in, key_prefix):
         for cv in col_vals:
             table_html= highlight_html_cell(table_html, f"z_{row_base:.1f}_{cv:.2f}", "red",2)
         table_html= highlight_html_cell(table_html, f"z_{row_base:.1f}_0", "red",2)
-
     if cur_step>=1 and col_in:
         for rv in sub_rows:
             table_html= highlight_html_cell(table_html, f"z_{rv:.1f}_{col_part:.2f}", "red",2)
-
     if cur_step>=2 and row_in and col_in:
         table_html= highlight_html_cell(table_html, f"z_{row_base:.1f}_{col_part:.2f}", "blue",3)
 
@@ -411,8 +407,9 @@ def show_z_table_lookup(z_in, key_prefix):
 
     next_step_button(step_key)
 
+
 ###############################################################################
-#                       3) F-DISTRIBUTION TAB
+#                      3) F-DISTRIBUTION TAB
 ###############################################################################
 
 def show_f_distribution_tab():
@@ -428,14 +425,14 @@ def show_f_distribution_tab():
 
     if st.button("Update Plot", key="f_tab_update"):
         fig= plot_f_distribution(f_val, df1, df2, alpha)
-        st.pyplot(fig)
+        st.pyplot(fig, use_container_width=True)
 
     with st.expander("Show F Table Lookup (±5 around df1, df2)"):
         show_f_table_lookup(df1, df2, alpha, "f_tab")
 
 
 def plot_f_distribution(f_val, df1, df2, alpha):
-    fig, ax= plt.subplots(figsize=(5,3))
+    fig, ax= plt.subplots(figsize=(8,4), dpi=100)
     label_positions=[]
     x= np.linspace(0,5,500)
     y= stats.f.pdf(x, df1, df2)
@@ -519,7 +516,6 @@ def show_f_table_lookup(df1_u, df2_u, alpha, key_prefix):
     row_in= (df1_u in df1_list)
     col_in= (df2_u in df2_list)
 
-    # step logic: 0 => row df1, 1 => col df2, 2 => intersection
     if cur_step>=0 and row_in:
         for d2 in df2_list:
             table_html= highlight_html_cell(table_html, f"f_{df1_u}_{d2}", "red",2)
@@ -549,7 +545,7 @@ def show_f_table_lookup(df1_u, df2_u, alpha, key_prefix):
 
 
 ###############################################################################
-#                      4) CHI-SQUARE TAB
+#                       4) CHI-SQUARE TAB
 ###############################################################################
 
 def show_chi_square_tab():
@@ -564,14 +560,14 @@ def show_chi_square_tab():
 
     if st.button("Update Plot", key="chi_tab_update"):
         fig= plot_chi_square(chi_val, df_val, alpha)
-        st.pyplot(fig)
+        st.pyplot(fig, use_container_width=True)
 
     with st.expander("Show Chi-Square Table Lookup (±5 df)"):
         show_chi_table_lookup(df_val, alpha, "chi_tab")
 
 
 def plot_chi_square(chi_val, df, alpha):
-    fig, ax= plt.subplots(figsize=(5,3))
+    fig, ax= plt.subplots(figsize=(8,4), dpi=100)
     label_positions=[]
     x_max= max(30, df*2)
     x= np.linspace(0,x_max,400)
@@ -590,7 +586,9 @@ def plot_chi_square(chi_val, df, alpha):
                 f"chi²_calc={chi_val:.3f}", 'blue')
 
     sig= (chi_val> chi_crit)
-    msg= f"χ²={chi_val:.3f} > {chi_crit:.3f} => Reject H₀" if sig else f"χ²={chi_val:.3f} ≤ {chi_crit:.3f} => Fail to Reject H₀"
+    msg= (f"χ²={chi_val:.3f} > {chi_crit:.3f} => Reject H₀"
+          if sig else
+          f"χ²={chi_val:.3f} ≤ {chi_crit:.3f} => Fail to Reject H₀")
     ax.set_title(f"Chi-Square (df={df})\n{msg}")
     ax.legend()
     fig.tight_layout()
@@ -602,7 +600,7 @@ def show_chi_table_lookup(df_val, alpha, key_prefix):
 
     step_key= key_prefix + "_table_step"
     if step_key not in st.session_state:
-        st.session_state[step_key]= 0
+        st.session_state[step_key]=0
     cur_step= st.session_state[step_key]
 
     df_min= max(1, df_val-5)
@@ -656,7 +654,6 @@ def show_chi_table_lookup(df_val, alpha, key_prefix):
         c_idx= None
         col_in= False
 
-    # 0-> row highlight, 1-> column highlight, 2-> intersection
     if cur_step>=0 and row_in:
         for cc in range(len(alpha_list)+1):
             table_html= highlight_html_cell(table_html, f"chi_{df_val}_{cc}", "red",2)
@@ -683,7 +680,7 @@ def show_chi_table_lookup(df_val, alpha, key_prefix):
 
 
 ###############################################################################
-#                      5) MANN–WHITNEY U TAB
+#                   5) MANN–WHITNEY U TAB
 ###############################################################################
 
 def show_mann_whitney_tab():
@@ -700,18 +697,18 @@ def show_mann_whitney_tab():
 
     if st.button("Update Plot", key="mw_tab_update"):
         fig= plot_mann_whitney(U_val, n1, n2, alpha, tail_s)
-        st.pyplot(fig)
+        st.pyplot(fig, use_container_width=True)
 
     with st.expander("Show Mann–Whitney U Table Lookup"):
         st.write("Implement a step-by-step highlight similarly if desired.")
 
 
 def plot_mann_whitney(U_val, n1, n2, alpha, tail_s):
-    fig, ax= plt.subplots(figsize=(5,3))
+    fig, ax= plt.subplots(figsize=(8,4), dpi=100)
     label_positions=[]
     meanU= n1*n2/2
     sdU= np.sqrt(n1*n2*(n1+n2+1)/12)
-    z_val= (U_val- meanU)/ sdU
+    z_val= (U_val- meanU)/sdU
 
     x= np.linspace(-4,4,400)
     y= stats.norm.pdf(x)
@@ -745,7 +742,7 @@ def plot_mann_whitney(U_val, n1, n2, alpha, tail_s):
 
 
 ###############################################################################
-#                   6) WILCOXON SIGNED-RANK TAB
+#                  6) WILCOXON SIGNED-RANK TAB
 ###############################################################################
 
 def show_wilcoxon_tab():
@@ -761,18 +758,18 @@ def show_wilcoxon_tab():
 
     if st.button("Update Plot", key="wil_tab_update"):
         fig= plot_wilcoxon(T_val, N_val, alpha, tail_s)
-        st.pyplot(fig)
+        st.pyplot(fig, use_container_width=True)
 
     with st.expander("Show Wilcoxon Table Lookup"):
         st.write("Same approach with step-by-step highlight if needed.")
 
 
 def plot_wilcoxon(T_val, N, alpha, tail_s):
-    fig, ax= plt.subplots(figsize=(5,3))
+    fig, ax= plt.subplots(figsize=(8,4), dpi=100)
     label_positions=[]
     meanT= N*(N+1)/4
     sdT= np.sqrt(N*(N+1)*(2*N+1)/24)
-    z_val= (T_val- meanT)/ sdT
+    z_val= (T_val - meanT)/ sdT
 
     x= np.linspace(-4,4,400)
     y= stats.norm.pdf(x)
@@ -807,7 +804,7 @@ def plot_wilcoxon(T_val, N, alpha, tail_s):
 
 
 ###############################################################################
-#                         7) BINOMIAL TAB
+#                     7) BINOMIAL TAB
 ###############################################################################
 
 def show_binomial_tab():
@@ -824,26 +821,26 @@ def show_binomial_tab():
 
     if st.button("Update Plot", key="bin_tab_update"):
         fig= plot_binomial(n,x,p,alpha,tail_s)
-        st.pyplot(fig)
+        st.pyplot(fig, use_container_width=True)
 
     with st.expander("Show Binomial Table Lookup (±5 around n)"):
         show_binomial_table_lookup(n, alpha, tail_s, "bin_tab")
 
 
 def plot_binomial(n,x,p,alpha,tail_s):
-    fig, ax= plt.subplots(figsize=(5,3))
+    fig, ax= plt.subplots(figsize=(8,4), dpi=100)
     k_vals= np.arange(n+1)
     pmf_vals= stats.binom.pmf(k_vals, n, p)
     bars= ax.bar(k_vals, pmf_vals, color='lightgrey', edgecolor='black')
 
     mean_= n*p
     if tail_s=="one-tailed":
-        if x<=mean_:
+        if x<= mean_:
             p_val= stats.binom.cdf(x, n, p)
         else:
             p_val= 1- stats.binom.cdf(x-1, n, p)
     else:
-        if x<=mean_:
+        if x<= mean_:
             p_val= stats.binom.cdf(x, n, p)*2
         else:
             p_val= (1- stats.binom.cdf(x-1, n, p))*2
@@ -917,11 +914,11 @@ def show_binomial_table_lookup(n_val, alpha, tail_s, key_prefix):
         while lo<=nn and cdf[lo]<half:
             lo+=1
         hi= nn
-        upper=1-cdf[hi-1] if hi>0 else 1
+        upper= 1 - cdf[hi-1] if hi>0 else 1
         while hi>=0 and upper<half:
             hi-=1
             if hi>=0:
-                upper=1-cdf[hi]
+                upper=1 - cdf[hi]
         return (lo,hi)
 
     table_data={}
@@ -1005,12 +1002,13 @@ def show_binomial_table_lookup(n_val, alpha, tail_s, key_prefix):
 
 
 ###############################################################################
-#                                   MAIN
+#                                 MAIN
 ###############################################################################
 
 def main():
-    st.set_page_config(page_title="PSYC250 - Full Stats Explorer", layout="wide")
-    st.title("PSYC250 - Statistical Tables Explorer (iframe Edition)")
+    st.set_page_config(page_title="PSYC250 - Full Stats Explorer (Larger Plots)",
+                       layout="wide")
+    st.title("PSYC250 - Statistical Tables Explorer (iframe + bigger figures)")
 
     tabs= st.tabs([
         "t-Distribution",
@@ -1036,6 +1034,7 @@ def main():
         show_wilcoxon_tab()
     with tabs[6]:
         show_binomial_tab()
+
 
 if __name__=="__main__":
     main()
