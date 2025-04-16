@@ -1,8 +1,6 @@
 ###############################################################################
-# ps yc250_streamlit_full.py
-# A single-file Streamlit app replicating your 1,700-line "PSYC250 Explorer."
-#
-# Usage: streamlit run psyc250_streamlit_full.py
+# psyc250_streamlit_full_keys.py
+# A single-file Streamlit app with unique keys for each widget
 ###############################################################################
 
 import streamlit as st
@@ -11,16 +9,13 @@ import matplotlib.pyplot as plt
 import matplotlib
 from scipy import stats
 
-matplotlib.use("Agg")  # For headless usage in Streamlit
+matplotlib.use("Agg")
 
 ###############################################################################
 # Helper: place_label for overlap fixes
 ###############################################################################
 
 def place_label(ax, label_positions, x, y, text, color='blue'):
-    """
-    Places text on Axes at (x,y), offset if needed to avoid overlapping.
-    """
     offset_x = 0.0
     offset_y = 0.02
     for (xx, yy) in label_positions:
@@ -33,27 +28,41 @@ def place_label(ax, label_positions, x, y, text, color='blue'):
     label_positions.append((final_x, final_y))
 
 ###############################################################################
-# T-DISTRIBUTION TAB
+# 1) T-DISTRIBUTION
 ###############################################################################
 
 def show_t_distribution_tab():
     st.subheader("t-Distribution")
 
-    # Inputs
     col1, col2 = st.columns(2)
     with col1:
-        t_val = st.number_input("t statistic", value=2.87)
-        df_val = st.number_input("df", value=55)
+        t_val = st.number_input(
+            "t statistic",
+            value=2.87,
+            key="t_t_stat"
+        )
+        df_val = st.number_input(
+            "df",
+            value=55,
+            key="t_df"
+        )
     with col2:
-        alpha_val = st.number_input("Alpha (α)", value=0.05, step=0.01)
-        tail_type = st.radio("Tail Type", ["one-tailed", "two-tailed"])
+        alpha_val = st.number_input(
+            "Alpha (α)",
+            value=0.05,
+            step=0.01,
+            key="t_alpha"
+        )
+        tail_type = st.radio(
+            "Tail Type",
+            ["one-tailed", "two-tailed"],
+            key="t_tail"
+        )
 
-    # Button to update
-    if st.button("Update t-Plot"):
+    if st.button("Update t-Plot", key="t_update_btn"):
         fig = plot_t_distribution(t_val, df_val, alpha_val, tail_type)
         st.pyplot(fig)
 
-    # Table lookup in an expander
     with st.expander("Show Table Lookup (±5 around df)"):
         render_t_table_lookup(df_val, alpha_val, tail_type)
 
@@ -85,7 +94,7 @@ def plot_t_distribution(t_val, df, alpha, tail_s):
         rx= x[x>= t_crit_r]
         lx= x[x<= t_crit_l]
         ax.fill_between(rx, y[x>=t_crit_r], color='red', alpha=0.3)
-        ax.fill_between(lx, y[x<=t_crit_l], color='red', alpha=0.3, label="Reject H₀")
+        ax.fill_between(lx, y[x<= t_crit_l], color='red', alpha=0.3, label="Reject H₀")
         ax.axvline(t_crit_r, color='green', linestyle='--')
         ax.axvline(t_crit_l, color='green', linestyle='--')
         labelme(t_crit_r, stats.t.pdf(t_crit_r,df)+0.02, f"+t_crit={t_crit_r:.4f}", 'green')
@@ -111,42 +120,28 @@ def plot_t_distribution(t_val, df, alpha, tail_s):
 
 def render_t_table_lookup(df_user, alpha_user, tail_s):
     st.write("**This is a partial t-table ±5 around user df.**")
-    # Let user pick step from a slider
-    steps = [
-        f"1) Highlight row for df={df_user}",
-        f"2) Highlight col for tail={('one' if tail_s=='one-tailed' else 'two')}, α={alpha_user}",
-        "3) Intersection => t_crit"
-    ]
-    # If alpha=0.05 & tail=one => highlight two_0.10
-    show_equiv= (abs(alpha_user-0.05)<1e-9 and tail_s=="one-tailed")
-    if show_equiv:
-        steps.append("4) Notice one_0.05 ~ two_0.10 => highlight that, too!")
-    step = st.slider("Highlight Step", 0, len(steps), 0)
-    if step>0: st.write("Current step:", steps[step-1])
+    st.write(f"_Pretend we highlight row df={df_user} & col near α={alpha_user}_")
 
-    # We won't build the entire HTML. We'll do a minimal placeholder:
-    st.write(f"_Pretend we highlight row df={df_user} and col near α={alpha_user}, step={step}_")
 
 ###############################################################################
-# Z-DISTRIBUTION TAB
+# 2) Z-DISTRIBUTION
 ###############################################################################
 
 def show_z_distribution_tab():
     st.subheader("z-Distribution")
-    col1, col2 = st.columns(2)
-    with col1:
-        z_val = st.number_input("z statistic", value=1.64)
-    with col2:
-        alpha_val = st.number_input("Alpha (α)", value=0.05)
-        tail_type = st.radio("Tail Type (z)", ["one-tailed", "two-tailed"])
+    c1, c2 = st.columns(2)
+    with c1:
+        z_val = st.number_input("z statistic", value=1.64, key="z_zval")
+    with c2:
+        alpha_val = st.number_input("Alpha (α)", value=0.05, step=0.01, key="z_alpha")
+        tail_type = st.radio("Tail Type (z)", ["one-tailed", "two-tailed"], key="z_tail")
 
-    if st.button("Update z-Plot"):
+    if st.button("Update z-Plot", key="z_update_btn"):
         fig = plot_z_distribution(z_val, alpha_val, tail_type)
         st.pyplot(fig)
 
     with st.expander("Show Partial z-Table Lookup (±10 rows)"):
         st.write("_We highlight row/col intersection in a partial ztable_")
-        st.write("**(Minimal demonstration in code)**")
 
 def plot_z_distribution(z_val, alpha, tail_s):
     fig, ax= plt.subplots(figsize=(5,3), dpi=100)
@@ -194,19 +189,20 @@ def plot_z_distribution(z_val, alpha, tail_s):
     return fig
 
 ###############################################################################
-# F-DISTRIBUTION TAB
+# 3) F-DISTRIBUTION
 ###############################################################################
 
 def show_f_distribution_tab():
     st.subheader("F-Distribution (One-tailed)")
     c1, c2 = st.columns(2)
     with c1:
-        f_val= st.number_input("F statistic", value=3.49)
-        df1= st.number_input("df1", value=3)
-        df2= st.number_input("df2", value=12)
+        f_val= st.number_input("F statistic", value=3.49, key="f_stat")
+        df1= st.number_input("df1", value=3, key="f_df1")
+        df2= st.number_input("df2", value=12, key="f_df2")
     with c2:
-        alpha= st.number_input("Alpha (α)", value=0.05, step=0.01)
-    if st.button("Update F-Plot"):
+        alpha= st.number_input("Alpha (α)", value=0.05, step=0.01, key="f_alpha")
+
+    if st.button("Update F-Plot", key="f_update_btn"):
         fig = plot_f_distribution(f_val, df1, df2, alpha)
         st.pyplot(fig)
 
@@ -243,18 +239,19 @@ def plot_f_distribution(f_val, df1, df2, alpha):
     return fig
 
 ###############################################################################
-# CHI-SQUARE TAB
+# 4) Chi-Square
 ###############################################################################
 
 def show_chi_square_tab():
     st.subheader("Chi-Square (One-tailed)")
     col1, col2 = st.columns(2)
     with col1:
-        chi_val= st.number_input("Chi-square stat", value=10.5)
-        df_val= st.number_input("df", value=12)
+        chi_val= st.number_input("Chi-square stat", value=10.5, key="chi_chi")
+        df_val= st.number_input("df", value=12, key="chi_df")
     with col2:
-        alpha= st.number_input("Alpha (α)", value=0.05)
-    if st.button("Update χ²-Plot"):
+        alpha= st.number_input("Alpha (α)", value=0.05, step=0.01, key="chi_alpha")
+
+    if st.button("Update χ²-Plot", key="chi_update_btn"):
         fig= plot_chi_square(chi_val, df_val, alpha)
         st.pyplot(fig)
 
@@ -292,26 +289,26 @@ def plot_chi_square(chi_val, df, alpha):
     return fig
 
 ###############################################################################
-# MANN–WHITNEY U TAB
+# 5) Mann–Whitney U
 ###############################################################################
 
 def show_mann_whitney_tab():
-    st.subheader("Mann–Whitney U (one/two-tailed, approximate normal => z)")
+    st.subheader("Mann–Whitney U (one/two-tailed)")
 
     col1, col2 = st.columns(2)
     with col1:
-        U_val= st.number_input("U statistic", value=5)
-        n1= st.number_input("n1", value=5)
-        n2= st.number_input("n2", value=6)
+        U_val= st.number_input("U statistic", value=5, key="mw_u")
+        n1= st.number_input("n1", value=5, key="mw_n1")
+        n2= st.number_input("n2", value=6, key="mw_n2")
     with col2:
-        alpha= st.number_input("Alpha (α)", value=0.05)
-        tail_s= st.radio("Tail Type", ["one-tailed","two-tailed"])
+        alpha= st.number_input("Alpha (α)", value=0.05, step=0.01, key="mw_alpha")
+        tail_s= st.radio("Tail Type", ["one-tailed","two-tailed"], key="mw_tail")
 
-    if st.button("Update Mann–Whitney Plot"):
+    if st.button("Update Mann–Whitney Plot", key="mw_update_btn"):
         fig= plot_mann_whitney(U_val,n1,n2,alpha,tail_s)
         st.pyplot(fig)
 
-    with st.expander("Show Mann–Whitney Table Lookup"):
+    with st.expander("Show Mann–Whitney Table Lookup (±5)"):
         st.write("**Minimal** ±5 approach demonstration")
 
 def plot_mann_whitney(U_val,n1,n2,alpha,tail_s):
@@ -340,7 +337,7 @@ def plot_mann_whitney(U_val,n1,n2,alpha,tail_s):
         rx= x[x>=zCritR]
         lx= x[x<=zCritL]
         ax.fill_between(rx, y[x>=zCritR], color='red', alpha=0.3)
-        ax.fill_between(lx, y[x<=zCritL], color='red', alpha=0.3,label="Reject H₀")
+        ax.fill_between(lx, y[x<=zCritL], color='red', alpha=0.3, label="Reject H₀")
         ax.axvline(zCritR, color='green', linestyle='--')
         ax.axvline(zCritL, color='green', linestyle='--')
         place_label(ax, label_positions, zCritR, stats.norm.pdf(zCritR), f"+z_crit={zCritR:.2f}", 'green')
@@ -358,21 +355,21 @@ def plot_mann_whitney(U_val,n1,n2,alpha,tail_s):
     return fig
 
 ###############################################################################
-# WILCOXON TAB
+# 6) Wilcoxon Signed-Rank
 ###############################################################################
 
 def show_wilcoxon_tab():
-    st.subheader("Wilcoxon Signed-Rank (one/two-tailed, approx normal => z)")
+    st.subheader("Wilcoxon Signed-Rank (one/two-tailed)")
 
     col1, col2 = st.columns(2)
     with col1:
-        T_val= st.number_input("T statistic", value=5)
-        N_val= st.number_input("N (non-zero diffs)", value=6)
+        T_val= st.number_input("T statistic", value=5, key="wil_t")
+        N_val= st.number_input("N (non-zero diffs)", value=6, key="wil_n")
     with col2:
-        alpha= st.number_input("Alpha (α)", value=0.05)
-        tail_s= st.radio("Tail Type", ["one-tailed","two-tailed"])
+        alpha= st.number_input("Alpha (α)", value=0.05, step=0.01, key="wil_alpha")
+        tail_s= st.radio("Tail Type", ["one-tailed","two-tailed"], key="wil_tail")
 
-    if st.button("Update Wilcoxon Plot"):
+    if st.button("Update Wilcoxon Plot", key="wil_update_btn"):
         fig= plot_wilcoxon(T_val, N_val, alpha, tail_s)
         st.pyplot(fig)
 
@@ -405,7 +402,7 @@ def plot_wilcoxon(T_val, N, alpha, tail_s):
         rx= x[x>=zCritR]
         lx= x[x<=zCritL]
         ax.fill_between(rx, y[x>=zCritR], color='red', alpha=0.3)
-        ax.fill_between(lx, y[x<=zCritL], color='red', alpha=0.3, label="Reject H₀")
+        ax.fill_between(lx, y[x<=zCritL], color='red', alpha=0.3,label="Reject H₀")
         ax.axvline(zCritR, color='green', linestyle='--')
         ax.axvline(zCritL, color='green', linestyle='--')
         place_label(ax, label_positions, zCritR, stats.norm.pdf(zCritR), f"+z_crit={zCritR:.2f}", 'green')
@@ -423,7 +420,7 @@ def plot_wilcoxon(T_val, N, alpha, tail_s):
     return fig
 
 ###############################################################################
-# BINOMIAL TAB
+# 7) Binomial
 ###############################################################################
 
 def show_binomial_tab():
@@ -431,20 +428,19 @@ def show_binomial_tab():
 
     col1, col2 = st.columns(2)
     with col1:
-        n= st.number_input("n", value=10)
-        x= st.number_input("x (successes)", value=3)
+        n= st.number_input("n", value=10, key="bin_n")
+        x= st.number_input("x (successes)", value=3, key="bin_x")
     with col2:
-        p= st.number_input("p", value=0.5, step=0.01)
-        alpha= st.number_input("Alpha (α)", value=0.05, step=0.01)
-        tail_s= st.radio("Tail Type", ["one-tailed","two-tailed"])
+        p= st.number_input("p", value=0.5, step=0.01, key="bin_p")
+        alpha= st.number_input("Alpha (α)", value=0.05, step=0.01, key="bin_alpha")
+        tail_s= st.radio("Tail Type", ["one-tailed","two-tailed"], key="bin_tail")
 
-    if st.button("Update Binomial Plot"):
+    if st.button("Update Binomial Plot", key="bin_update_btn"):
         fig= plot_binomial(n,x,p,alpha,tail_s)
         st.pyplot(fig)
 
     with st.expander("Show Binomial Table Lookup (±5)"):
         st.write("**Minimal** demonstration of row => col => intersection")
-
 
 def plot_binomial(n,x,p,alpha,tail_s):
     fig, ax= plt.subplots(figsize=(5,3), dpi=100)
@@ -454,7 +450,6 @@ def plot_binomial(n,x,p,alpha,tail_s):
     bars= ax.bar(k_vals, pmf_vals, color='lightgrey', edgecolor='black')
 
     mean_ = n*p
-    # compute p_value
     if tail_s=="one-tailed":
         if x<= mean_:
             p_val= stats.binom.cdf(x, n, p)
@@ -540,7 +535,6 @@ def main():
         show_wilcoxon_tab()
     with tabs[6]:
         show_binomial_tab()
-
 
 if __name__=="__main__":
     main()
