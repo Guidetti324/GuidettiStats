@@ -1,307 +1,196 @@
 ###############################################################################
 #  PSYC‑250  ‑‑  Statistical Tables Explorer  (Streamlit, 12 × 4 figures)
 #  ---------------------------------------------------------------------------
-#  Seven tabs:
-#     1) t‑Distribution
-#     2) z‑Distribution
-#     3) F‑Distribution
+#  Tabs:
+#     1) t‑Distribution              5) Mann‑Whitney U
+#     2) z‑Distribution              6) Wilcoxon Signed‑Rank T
+#     3) F‑Distribution              7) Binomial
 #     4) Chi‑Square
-#     5) Mann‑Whitney U
-#     6) Wilcoxon Signed‑Rank T
-#     7) Binomial
 #
-#  Each tab provides:
-#     • Input widgets
+#  Features (all tabs):
 #     • 12 × 4 Matplotlib plot
-#     • Step‑wise HTML lookup table (row → col → cell)
-#     • APA‑7 narrative with:
-#         1. Calculated statistic + p‑value
-#         2. Critical statistic + p‑value
-#         3. Decision via statistic comparison
-#         4. Decision via p‑value comparison
-#         5. Concise APA conclusion
+#     • Step‑wise HTML lookup table
+#     • Detailed APA‑7 narrative (calculated / critical stat & p, decisions)
 #
-#  Tested on:
-#     Python 3.12.1 • streamlit 1.30.0 • matplotlib 3.8.2 • scipy 1.11.4
+#  v2025‑04‑17‑z‑table‑10row
 ###############################################################################
 
 import streamlit as st
 import numpy as np
 import matplotlib.pyplot as plt
-import streamlit.components.v1 as components
 from scipy import stats
 
-# Head‑less backend for Streamlit
-plt.switch_backend("Agg")
+plt.switch_backend("Agg")     # head‑less backend
 
-# ─────────────────────────────────────────────────────────────────────────────
-#  Generic helpers
-# ─────────────────────────────────────────────────────────────────────────────
+# ──────────────────────────────────  helpers  ───────────────────────────────
 def place_label(ax, placed, x, y, txt, *, color="blue"):
-    """Avoid overlapping labels on the plot."""
     dx = dy = 0.0
     for xx, yy in placed:
         if abs(x - xx) < 0.15 and abs(y - yy) < 0.05:
-            dx += 0.06
-            dy += 0.04
+            dx += 0.06; dy += 0.04
     ax.text(x + dx, y + dy, txt, color=color,
             ha="left", va="bottom", fontsize=8, clip_on=True)
     placed.append((x + dx, y + dy))
 
-
-def style_cell(html_in, cell_id, *, color="red", px=2):
-    """Add a coloured border to a table cell with id == cell_id."""
-    return html_in.replace(
-        f'id="{cell_id}"',
-        f'id="{cell_id}" style="border:{px}px solid {color};"', 1)
-
+def style_cell(html, cell_id, *, color="red", px=2):
+    return html.replace(f'id="{cell_id}"',
+                        f'id="{cell_id}" style="border:{px}px solid {color};"', 1)
 
 def iframe(html, *, height=460):
-    """Scrollable container (avoids iframe wheel‑capture)."""
-    st.markdown(
-        f'<div style="overflow:auto; max-height:{height}px;">{html}</div>',
-        unsafe_allow_html=True,
-    )
-
+    st.markdown(f'<div style="overflow:auto;max-height:{height}px;">{html}</div>',
+                unsafe_allow_html=True)
 
 def next_button(step_key):
     if st.button("Next Step", key=f"{step_key}__btn"):
         st.session_state[step_key] += 1
 
+def wrap(css, body):
+    return f"<style>{css}</style><table>{body}</table>"
 
-def wrap(css, inner):
-    return f"<style>{css}</style><table>{inner}</table>"
+CSS = ("table{border-collapse:collapse}"
+       "th,td{border:1px solid #000;height:30px;text-align:center;"
+       "font-family:sans-serif}")
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-#  TAB 1 • t‑Distribution
-# ─────────────────────────────────────────────────────────────────────────────
+# ─────────────────────────────  TAB 1 • t‑Distribution  ─────────────────────
 def plot_t(t_calc, df, alpha, tail):
-    fig, ax = plt.subplots(figsize=(12, 4), dpi=100)
-    xs = np.linspace(-4, 4, 400)
+    fig, ax = plt.subplots(figsize=(12,4), dpi=100)
+    xs = np.linspace(-4,4,400)
     ys = stats.t.pdf(xs, df)
     ax.plot(xs, ys, "k")
     ax.fill_between(xs, ys, color="lightgrey", alpha=0.25,
                     label="Fail to Reject H₀")
-    lbl = []
-
+    labels=[]
     if tail.startswith("one"):
-        crit = stats.t.ppf(1 - alpha, df)
-        ax.fill_between(xs[xs >= crit], ys[xs >= crit],
-                        color="red", alpha=0.30, label="Reject H₀")
-        ax.axvline(x=crit, color="green", linestyle="--")
-        place_label(ax, lbl, crit, stats.t.pdf(crit, df)+.02,
-                    f"t₍crit₎={crit:.2f}", color="green")
-    else:
-        crit = stats.t.ppf(1 - alpha/2, df)
-        ax.fill_between(xs[xs >= crit], ys[xs >= crit], color="red", alpha=0.30)
-        ax.fill_between(xs[xs <= -crit], ys[xs <= -crit], color="red", alpha=0.30,
+        crit=stats.t.ppf(1-alpha, df)
+        ax.fill_between(xs[xs>=crit],ys[xs>=crit],color="red",alpha=0.30,
                         label="Reject H₀")
-        ax.axvline(x= crit, color="green", linestyle="--")
-        ax.axvline(x=-crit, color="green", linestyle="--")
-        place_label(ax, lbl,  crit, stats.t.pdf( crit, df)+.02,
-                    f"+t₍crit₎={crit:.2f}", color="green")
-        place_label(ax, lbl, -crit, stats.t.pdf(-crit, df)+.02,
-                    f"–t₍crit₎={crit:.2f}", color="green")
-
-    ax.axvline(x=t_calc, color="blue", linestyle="--")
-    place_label(ax, lbl, t_calc, stats.t.pdf(t_calc, df)+.02,
-                f"t₍calc₎={t_calc:.2f}", color="blue")
-    ax.set_xlabel("t")
-    ax.set_ylabel("Density")
-    ax.set_title("t‑Distribution")
-    ax.legend()
-    fig.tight_layout()
-    return fig
-
-
-def tab_t():
-    st.subheader("Tab 1 • t‑Distribution")
-    c1, c2 = st.columns(2)
-    with c1:
-        t_val = st.number_input("t statistic", value=2.87, key="t_val")
-        df    = st.number_input("df", min_value=1, value=55, step=1, key="t_df")
-    with c2:
-        alpha = st.number_input("α", value=0.05, step=0.01,
-                                min_value=0.0001, max_value=0.5, key="t_alpha")
-        tail  = st.radio("Tail", ["one‑tailed", "two‑tailed"], key="t_tail")
-
-    if st.button("Update Plot", key="t_plot"):
-        st.pyplot(plot_t(t_val, df, alpha, tail))
-
-    with st.expander("Step‑by‑step t‑table"):
-        t_table(df, alpha, tail, "t")
-
+        ax.axvline(crit,color="green",ls="--")
+        place_label(ax,labels,crit,stats.t.pdf(crit,df)+.02,
+                    f"t₍crit₎={crit:.2f}",color="green")
+    else:
+        crit=stats.t.ppf(1-alpha/2, df)
+        ax.fill_between(xs[xs>= crit],ys[xs>= crit],color="red",alpha=0.30)
+        ax.fill_between(xs[xs<=-crit],ys[xs<=-crit],color="red",alpha=0.30,
+                        label="Reject H₀")
+        ax.axvline( crit,color="green",ls="--")
+        ax.axvline(-crit,color="green",ls="--")
+        place_label(ax,labels, crit,stats.t.pdf( crit,df)+.02,
+                    f"+t₍crit₎={crit:.2f}",color="green")
+        place_label(ax,labels,-crit,stats.t.pdf(-crit,df)+.02,
+                    f"–t₍crit₎={crit:.2f}",color="green")
+    ax.axvline(t_calc,color="blue",ls="--")
+    place_label(ax,labels,t_calc,stats.t.pdf(t_calc,df)+.02,
+                f"t₍calc₎={t_calc:.2f}",color="blue")
+    ax.set_xlabel("t"); ax.set_ylabel("Density"); ax.legend()
+    ax.set_title("t‑Distribution"); fig.tight_layout(); return fig
 
 def t_table(df, alpha, tail, key):
-    step_key = f"{key}_step"
-    step     = st.session_state.setdefault(step_key, -1)
-
-    rows = list(range(max(1, df-5), df+6))
-    heads = [
-        ("one", 0.10), ("one", 0.05), ("one", 0.01), ("one", 0.001),
-        ("two", 0.10), ("two", 0.05), ("two", 0.01), ("two", 0.001),
-    ]
-    head_html = "".join(f"<th>{m}_{a}</th>" for m, a in heads)
-    body_html = ""
+    step_key=f"{key}_step"; step=st.session_state.setdefault(step_key,-1)
+    rows=list(range(max(1,df-5),df+6))
+    heads=[("one",0.10),("one",0.05),("one",0.01),("one",0.001),
+           ("two",0.10),("two",0.05),("two",0.01),("two",0.001)]
+    head="".join(f"<th>{m}_{a}</th>" for m,a in heads)
+    body=""
     for r in rows:
-        body_html += f'<tr><td id="t_{r}_0">{r}</td>'
-        for i, (m, a) in enumerate(heads, start=1):
-            body_html += (f'<td id="t_{r}_{i}">'
-                          f'{stats.t.ppf(1 - a/(1 if m=="one" else 2), r):.2f}</td>')
-        body_html += "</tr>"
-
-    css = ("table{border-collapse:collapse}"
-           "th,td{border:1px solid #000;width:85px;height:30px;"
-           "text-align:center;font-size:0.9rem;font-family:sans-serif}"
-           "th{background:#fafafa}")
-    html = wrap(css, f"<tr><th>df</th>{head_html}</tr>{body_html}")
-
-    mode = "one" if tail.startswith("one") else "two"
-    col_idx = next(i for i, (m, a) in enumerate(heads, start=1)
-                   if m == mode and np.isclose(a, alpha))
-
-    if step >= 0:
+        body+=f'<tr><td id="t_{r}_0">{r}</td>'
+        for i,(m,a) in enumerate(heads,start=1):
+            body+=f'<td id="t_{r}_{i}">{stats.t.ppf(1-a/(1 if m=="one" else 2),r):.2f}</td>'
+        body+="</tr>"
+    html=wrap(f"{CSS}th{{background:#fafafa}}",
+              f"<tr><th>df</th>{head}</tr>{body}")
+    mode="one" if tail.startswith("one") else "two"
+    col_idx=[i for i,(m,a) in enumerate(heads,start=1)
+             if m==mode and np.isclose(a,alpha)][0]
+    if step>=0:
         for i in range(len(heads)+1):
-            html = style_cell(html, f"t_{df}_{i}")
-    if step >= 1:
+            html=style_cell(html,f"t_{df}_{i}")
+    if step>=1:
         for r in rows:
-            html = style_cell(html, f"t_{r}_{col_idx}")
-    if step >= 2:
-        html = style_cell(html, f"t_{df}_{col_idx}", color="blue", px=3)
-
+            html=style_cell(html,f"t_{r}_{col_idx}")
+    if step>=2:
+        html=style_cell(html,f"t_{df}_{col_idx}",color="blue",px=3)
     iframe(html)
-
-    msgs = ["Highlight df row", "Highlight α/tail column", "Intersection → t₍crit₎"]
-    if step < 0:
-        st.write("Click **Next Step** to begin.")
-    elif step >= len(msgs):
-        st.write("All steps complete!")
-    else:
-        st.write(f"**Step {step+1}**: {msgs[step]}")
+    msgs=["Highlight df row","Highlight α/tail column","Intersection → t₍crit₎"]
+    if step<0: st.write("Click **Next Step** to begin.")
+    elif step>=len(msgs): st.write("All steps complete!")
+    else: st.write(f"**Step {step+1}**: {msgs[step]}")
     next_button(step_key)
 
-    # APA narrative
-    t_val = st.session_state["t_val"]
+    t_val=st.session_state["t_val"]
     if tail.startswith("one"):
-        p_calc = stats.t.sf(abs(t_val), df)
-        crit   = stats.t.ppf(1 - alpha, df)
-        p_crit = alpha
-        reject = t_val > crit
+        p_calc=stats.t.sf(abs(t_val),df); crit=stats.t.ppf(1-alpha,df)
+        p_crit=alpha; reject=t_val>crit
     else:
-        p_calc = stats.t.sf(abs(t_val), df) * 2
-        crit   = stats.t.ppf(1 - alpha/2, df)
-        p_crit = alpha
-        reject = abs(t_val) > crit
-    decision = "rejected" if reject else "failed to reject"
+        p_calc=stats.t.sf(abs(t_val),df)*2; crit=stats.t.ppf(1-alpha/2,df)
+        p_crit=alpha; reject=abs(t_val)>crit
+    decision="rejected" if reject else "failed to reject"
     st.markdown(
         f"**Interpretation details**  \n"
         f"*Calculated statistic:* t({df}) = {t_val:.2f}, *p* = {p_calc:.3f}.  \n"
         f"*Critical statistic:* t₍crit₎ = {crit:.2f}, *p* = {p_crit:.3f}.  \n"
-        f"Calculated t is {'greater' if reject else 'not greater'} than critical t "
-        f"→ H₀ {'' if reject else 'not '}rejected.  \n"
-        f"Calculated *p* is {'below' if p_calc < p_crit else 'above'} α "
-        f"→ H₀ {'' if p_calc < p_crit else 'not '}rejected.  \n"
-        f"**APA‑style conclusion:** *t*({df}) = {t_val:.2f}, *p* = {p_calc:.3f} "
-        f"({tail}). H₀ was **{decision}** at α = {alpha:.2f}."
+        f"Calculated t {'>' if reject else '≤'} critical t → H₀ {decision}.  \n"
+        f"Calculated *p* {'<' if p_calc<p_crit else '≥'} α → H₀ {decision}.  \n"
+        f"**APA:** *t*({df}) = {t_val:.2f}, *p* = {p_calc:.3f} ({tail}). "
+        f"H₀ was **{decision}** at α = {alpha:.2f}."
     )
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-#  TAB 2 • z‑Distribution
-# ─────────────────────────────────────────────────────────────────────────────
-def plot_z(z_calc, alpha, tail):
-    fig, ax = plt.subplots(figsize=(12, 4), dpi=100)
-    xs = np.linspace(-4, 4, 400)
-    ys = stats.norm.pdf(xs)
-    ax.plot(xs, ys, "k")
-    ax.fill_between(xs, ys, color="lightgrey", alpha=0.25,
-                    label="Fail to Reject H₀")
-    lbl = []
-
-    if tail.startswith("one"):
-        crit = stats.norm.ppf(1 - alpha)
-        ax.fill_between(xs[xs >= crit], ys[xs >= crit],
-                        color="red", alpha=0.30, label="Reject H₀")
-        ax.axvline(x=crit, color="green", linestyle="--")
-        place_label(ax, lbl, crit, stats.norm.pdf(crit)+.02,
-                    f"z₍crit₎={crit:.2f}", color="green")
-    else:
-        crit = stats.norm.ppf(1 - alpha/2)
-        ax.fill_between(xs[xs >= crit], ys[xs >= crit], color="red", alpha=0.30)
-        ax.fill_between(xs[xs <= -crit], ys[xs <= -crit], color="red", alpha=0.30,
-                        label="Reject H₀")
-        ax.axvline(x= crit, color="green", linestyle="--")
-        ax.axvline(x=-crit, color="green", linestyle="--")
-        place_label(ax, lbl,  crit, stats.norm.pdf( crit)+.02,
-                    f"+z₍crit₎={crit:.2f}", color="green")
-        place_label(ax, lbl, -crit, stats.norm.pdf(-crit)+.02,
-                    f"–z₍crit₎={crit:.2f}", color="green")
-
-    ax.axvline(x=z_calc, color="blue", linestyle="--")
-    place_label(ax, lbl, z_calc, stats.norm.pdf(z_calc)+.02,
-                f"z₍calc₎={z_calc:.2f}", color="blue")
-    ax.set_xlabel("z")
-    ax.set_ylabel("Density")
-    ax.set_title("z‑Distribution")
-    ax.legend()
-    fig.tight_layout()
-    return fig
-
-
-def tab_z():
-    st.subheader("Tab 2 • z‑Distribution")
-    c1, c2 = st.columns(2)
+def tab_t():
+    st.subheader("Tab 1 • t‑Distribution")
+    c1,c2=st.columns(2)
     with c1:
-        z_val = st.number_input("z statistic", value=1.64, key="z_val")
+        t_val=st.number_input("t statistic",value=2.87,key="t_val")
+        df   =st.number_input("df",min_value=1,value=55,step=1,key="t_df")
     with c2:
-        alpha = st.number_input("α", value=0.05, step=0.01,
-                                min_value=0.0001, max_value=0.5, key="z_alpha")
-        tail  = st.radio("Tail", ["one‑tailed", "two‑tailed"], key="z_tail")
+        alpha=st.number_input("α",value=0.05,step=0.01,
+                              min_value=0.0001,max_value=0.5,key="t_alpha")
+        tail =st.radio("Tail",["one‑tailed","two‑tailed"],key="t_tail")
+    if st.button("Update Plot",key="t_plot"):
+        st.pyplot(plot_t(t_val,df,alpha,tail))
+    with st.expander("Step‑by‑step t‑table"):
+        t_table(df,alpha,tail,"t")
 
-    if st.button("Update Plot", key="z_plot"):
-        st.pyplot(plot_z(z_val, alpha, tail))
-
-    with st.expander("Step‑by‑step z‑table"):
-        z_table(z_val, "z", alpha, tail)
-
+# ─────────────────────────────  TAB 2 • z‑Distribution  ─────────────────────
+CSS_Z = CSS + "th{background:#fafafa}"    # reuse
 
 def z_table(z_in, key, alpha, tail):
-    step_key = f"{key}_step"
-    step     = st.session_state.setdefault(step_key, -1)
+    """Show ±10 rows around the relevant z row; handles negatives."""
+    step_key=f"{key}_step"; step=st.session_state.setdefault(step_key,-1)
 
-    z     = max(0, min(3.49, z_in))
-    row_v = np.floor(z * 10) / 10
-    col_v = round(z - row_v, 2)
+    z = max(-3.49, min(3.49, z_in))
+    row_base = np.floor(z * 10) / 10         # -1.3, 2.1, …
+    col_part = round(z - row_base, 2)        # 0.00–0.09
 
-    rows = np.round(np.arange(0, 3.5, 0.1), 1)
-    cols = np.round(np.arange(0, 0.1, 0.01), 2)
+    all_rows = np.round(np.arange(-3.4, 3.5, 0.1), 1)
+    all_cols = np.round(np.arange(0, 0.1, 0.01), 2)
 
-    head_html = "".join(f"<th>{c:.2f}</th>" for c in cols)
-    body_html = ""
+    # pick ±10 rows
+    idx = np.where(all_rows == row_base)[0][0]
+    start = max(0, idx - 10); end = min(len(all_rows)-1, idx + 10)
+    rows = all_rows[start:end+1]
+
+    if col_part not in all_cols:
+        col_part = min(all_cols, key=lambda c: abs(c - col_part))
+
+    head = "".join(f"<th>{c:.2f}</th>" for c in all_cols)
+    body = ""
     for r in rows:
-        body_html += f'<tr><td id="z_{r:.1f}_0">{r:.1f}</td>'
-        for c in cols:
-            body_html += (
-                f'<td id="z_{r:.1f}_{c:.2f}">{stats.norm.cdf(r+c):.4f}</td>'
-            )
-        body_html += "</tr>"
+        body += f'<tr><td id="z_{r:.1f}_0">{r:.1f}</td>'
+        for c in all_cols:
+            body += f'<td id="z_{r:.1f}_{c:.2f}">{stats.norm.cdf(r+c):.4f}</td>'
+        body += "</tr>"
 
-    css = ("table{border-collapse:collapse}"
-           "th,td{border:1px solid #000;width:70px;height:30px;"
-           "text-align:center;font-size:0.9rem;font-family:sans-serif}"
-           "th{background:#fafafa}")
-    html = wrap(css, f"<tr><th>z.x</th>{head_html}</tr>{body_html}")
+    html = wrap(CSS_Z, f"<tr><th>z.x</th>{head}</tr>{body}")
 
+    # highlights
     if step >= 0:
-        for c in cols:
-            html = style_cell(html, f"z_{row_v:.1f}_{c:.2f}")
-        html = style_cell(html, f"z_{row_v:.1f}_0")
+        for c in all_cols:
+            html = style_cell(html, f"z_{row_base:.1f}_{c:.2f}")
+        html = style_cell(html, f"z_{row_base:.1f}_0")
     if step >= 1:
         for r in rows:
-            html = style_cell(html, f"z_{r:.1f}_{col_v:.2f}")
+            html = style_cell(html, f"z_{r:.1f}_{col_part:.2f}")
     if step >= 2:
-        html = style_cell(html, f"z_{row_v:.1f}_{col_v:.2f}",
+        html = style_cell(html, f"z_{row_base:.1f}_{col_part:.2f}",
                           color="blue", px=3)
 
     iframe(html)
@@ -315,7 +204,7 @@ def z_table(z_in, key, alpha, tail):
         st.write(f"**Step {step+1}**: {msgs[step]}")
     next_button(step_key)
 
-    # APA
+    # APA narrative
     z_val = st.session_state["z_val"]
     p_calc = stats.norm.sf(abs(z_val)) * (1 if tail.startswith("one") else 2)
     crit   = stats.norm.ppf(1 - alpha) if tail.startswith("one") else stats.norm.ppf(1 - alpha/2)
@@ -326,14 +215,55 @@ def z_table(z_in, key, alpha, tail):
         f"**Interpretation details**  \n"
         f"*Calculated statistic:* z = {z_val:.2f}, *p* = {p_calc:.3f}.  \n"
         f"*Critical statistic:* z₍crit₎ = {crit:.2f}, *p* = {p_crit:.3f}.  \n"
-        f"Calculated z {'exceeds' if reject else 'does not exceed'} critical z "
-        f"→ H₀ {'' if reject else 'not '}rejected.  \n"
-        f"Calculated *p* is {'below' if p_calc < p_crit else 'above'} α "
-        f"→ H₀ {'' if p_calc < p_crit else 'not '}rejected.  \n"
-        f"**APA‑style conclusion:** *z* = {z_val:.2f}, *p* = {p_calc:.3f} "
-        f"({tail}). H₀ was **{decision}** at α = {alpha:.2f}."
+        f"Calculated z {'>' if reject else '≤'} critical z → H₀ {decision}.  \n"
+        f"Calculated *p* {'<' if p_calc < p_crit else '≥'} α → H₀ {decision}.  \n"
+        f"**APA:** *z* = {z_val:.2f}, *p* = {p_calc:.3f} ({tail}). "
+        f"H₀ was **{decision}** at α = {alpha:.2f}."
     )
 
+def plot_z(z_calc, alpha, tail):
+    fig,ax=plt.subplots(figsize=(12,4),dpi=100)
+    xs=np.linspace(-4,4,400); ys=stats.norm.pdf(xs)
+    ax.plot(xs,ys,"k"); ax.fill_between(xs,ys,color="lightgrey",alpha=0.25,
+                                        label="Fail to Reject H₀")
+    labels=[]
+    if tail.startswith("one"):
+        crit=stats.norm.ppf(1-alpha)
+        ax.fill_between(xs[xs>=crit],ys[xs>=crit],color="red",alpha=0.30,
+                        label="Reject H₀")
+        ax.axvline(crit,color="green",ls="--")
+        place_label(ax,labels,crit,stats.norm.pdf(crit)+.02,
+                    f"z₍crit₎={crit:.2f}",color="green")
+    else:
+        crit=stats.norm.ppf(1-alpha/2)
+        ax.fill_between(xs[xs>=crit],ys[xs>=crit],color="red",alpha=0.30)
+        ax.fill_between(xs[xs<=-crit],ys[xs<=-crit],color="red",alpha=0.30,
+                        label="Reject H₀")
+        ax.axvline( crit,color="green",ls="--")
+        ax.axvline(-crit,color="green",ls="--")
+        place_label(ax,labels, crit,stats.norm.pdf( crit)+.02,
+                    f"+z₍crit₎={crit:.2f}",color="green")
+        place_label(ax,labels,-crit,stats.norm.pdf(-crit)+.02,
+                    f"–z₍crit₎={crit:.2f}",color="green")
+    ax.axvline(z_calc,color="blue",ls="--")
+    place_label(ax,labels,z_calc,stats.norm.pdf(z_calc)+.02,
+                f"z₍calc₎={z_calc:.2f}",color="blue")
+    ax.set_xlabel("z"); ax.set_ylabel("Density"); ax.legend()
+    ax.set_title("z‑Distribution"); fig.tight_layout(); return fig
+
+def tab_z():
+    st.subheader("Tab 2 • z‑Distribution")
+    c1,c2=st.columns(2)
+    with c1:
+        z_val=st.number_input("z statistic",value=1.64,key="z_val")
+    with c2:
+        alpha=st.number_input("α",value=0.05,step=0.01,
+                              min_value=0.0001,max_value=0.5,key="z_alpha")
+        tail =st.radio("Tail",["one‑tailed","two‑tailed"],key="z_tail")
+    if st.button("Update Plot",key="z_plot"):
+        st.pyplot(plot_z(z_val,alpha,tail))
+    with st.expander("Step‑by‑step z‑table"):
+        z_table(z_val,"z",alpha,tail)
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  TAB 3 • F‑Distribution
