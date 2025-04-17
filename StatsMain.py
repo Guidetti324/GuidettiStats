@@ -140,37 +140,28 @@ def plot_t(t_calc, df, alpha, tail):
 # ....................................... animated table builder
 def build_t_html(df: int, alpha: float, tail: str, step: int) -> str:
     rows = list(range(max(1, df-5), df+6))
+    heads = [("one", 0.10), ("one", 0.05), ("one", 0.01), ("one", 0.001),
+             ("two", 0.10), ("two", 0.05), ("two", 0.01), ("two", 0.001)]
+    mode  = "one" if tail.startswith("one") else "two"
+    col   = next(i for i,(m,a) in enumerate(heads,1)
+                 if m==mode and np.isclose(a,alpha))
 
-    heads = [
-        ("one", 0.10), ("one", 0.05), ("one", 0.01), ("one", 0.001),
-        ("two", 0.10), ("two", 0.05), ("two", 0.01), ("two", 0.001)
-    ]
-    mode = "one" if tail.startswith("one") else "two"
-    col_idx = next(
-        i for i, (m, a) in enumerate(heads, start=1)
-        if m == mode and np.isclose(a, alpha)
-    )
+    head = "".join(f"<th>{m}_{a}</th>" for m,a in heads)
+    body = "".join(
+        "<tr>" +
+        f'<td id="t_{r}_0">{r}</td>' +
+        "".join(f'<td id="t_{r}_{i}">{stats.t.ppf(1-a/(1 if m=="one" else 2), r):.2f}</td>'
+                for i,(m,a) in enumerate(heads,1)) +
+        "</tr>"
+        for r in rows )
 
-    head_html = "".join(f"<th>{m}_{a}</th>" for m, a in heads)
-    body_html = ""
-    for r in rows:
-        body_html += f'<tr><td id="t_{r}_0">{r}</td>'
-        for i, (m, a) in enumerate(heads, start=1):
-            crit = stats.t.ppf(1 - a/(1 if m == "one" else 2), r)
-            body_html += f'<td id="t_{r}_{i}">{crit:.2f}</td>'
-        body_html += "</tr>"
-
-    html = wrap_table(CSS_BASE, f"<tr><th>df</th>{head_html}</tr>{body_html}")
-
-    if step >= 0:  # highlight row
-        for i in range(len(heads)+1):
-            html = style_cell(html, f"t_{df}_{i}")
-    if step >= 1:  # highlight column
-        for r in rows:
-            html = style_cell(html, f"t_{r}_{col_idx}")
-    if step >= 2:  # intersection
-        html = style_cell(html, f"t_{df}_{col_idx}", color="blue", px=3)
-
+    html = wrap_table(CSS_BASE, f"<tr><th>df</th>{head}</tr>{body}")
+    if step>=0:
+        for i in range(len(heads)+1): html=style_cell(html,f"t_{df}_{i}")
+    if step>=1:
+        for r in rows: html=style_cell(html,f"t_{r}_{col}")
+    if step>=2:
+        html=style_cell(html,f"t_{df}_{col}",color="blue",px=3)
     return html
 
 # ....................................... table wrapper
@@ -269,44 +260,29 @@ def plot_z(z_calc, alpha, tail):
 
 # ....................................... animated table builder
 def build_z_html(z: float, alpha: float, tail: str, step: int) -> str:
-    z = max(-3.49, min(3.49, z))
-    row_base = np.floor(z*10) / 10
-    col_part = round(z - row_base, 2)
+    z=np.clip(z,-3.49,3.49); row=np.floor(z*10)/10; col=round(z-row,2)
+    Rows=np.round(np.arange(-3.4,3.5,0.1),1); Cols=np.round(np.arange(0,0.1,0.01),2)
+    if col not in Cols: col=min(Cols,key=lambda c:abs(c-col))
+    idx=np.where(Rows==row)[0][0]; rows=Rows[max(0,idx-10):idx+11]
 
-    all_rows = np.round(np.arange(-3.4, 3.5, 0.1), 1)
-    all_cols = np.round(np.arange(0, 0.1, 0.01), 2)
+    head="".join(f"<th>{c:.2f}</th>" for c in Cols)
+    body="".join(
+        "<tr>" +
+        f'<td id="z_{r:.1f}_0">{r:.1f}</td>' +
+        "".join(f'<td id="z_{r:.1f}_{c:.2f}">{stats.norm.cdf(r+c):.4f}</td>'
+                for c in Cols) +
+        "</tr>"
+        for r in rows)
 
-    if col_part not in all_cols:
-        col_part = min(all_cols, key=lambda c: abs(c - col_part))
-
-    row_idx = int(np.where(all_rows == row_base)[0])
-    rows = all_rows[max(0, row_idx-10):row_idx+11]
-
-    head_html = "".join(f"<th>{c:.2f}</th>" for c in all_cols)
-    body_html = ""
-    for r in rows:
-        body_html += f'<tr><td id="z_{r:.1f}_0">{r:.1f}</td>'
-        for c in all_cols:
-            body_html += (
-                f'<td id="z_{r:.1f}_{c:.2f}">{stats.norm.cdf(r+c):.4f}</td>'
-            )
-        body_html += "</tr>"
-
-    html = wrap_table(CSS_BASE,
-                      f"<tr><th>z.x</th>{head_html}</tr>{body_html}")
-
-    if step >= 0:
-        for c in all_cols:
-            html = style_cell(html, f"z_{row_base:.1f}_{c:.2f}")
-        html = style_cell(html, f"z_{row_base:.1f}_0")
-    if step >= 1:
-        for r in rows:
-            html = style_cell(html, f"z_{r:.1f}_{col_part:.2f}")
-    if step >= 2:
-        html = style_cell(html, f"z_{row_base:.1f}_{col_part:.2f}",
-                          color="blue", px=3)
+    html=wrap_table(CSS_BASE,f"<tr><th>z.x</th>{head}</tr>{body}")
+    if step>=0:
+        for c in Cols: html=style_cell(html,f"z_{row:.1f}_{c:.2f}")
+        html=style_cell(html,f"z_{row:.1f}_0")
+    if step>=1:
+        for r in rows: html=style_cell(html,f"z_{r:.1f}_{col:.2f}")
+    if step>=2:
+        html=style_cell(html,f"z_{row:.1f}_{col:.2f}",color="blue",px=3)
     return html
-
 # ....................................... table wrapper
 def z_table(z_val: float, alpha: float, tail: str):
     animate(lambda s: build_z_html(z_val, alpha, tail, s),
@@ -381,34 +357,22 @@ def plot_f(f_calc, df1, df2, alpha):
     return fig
 
 # ....................................... animated table builder
-def build_f_html(df1: int, df2: int, alpha: float, step: int) -> str:
-    rows = list(range(max(1, df1-5), df1+6))
-    cols = list(range(max(1, df2-5), df2+6))
-    col_idx = cols.index(df2) + 1
-
-    head_html = "".join(f"<th>{c}</th>" for c in cols)
-    body_html = ""
-    for r in rows:
-        body_html += f'<tr><td id="f_{r}_0">{r}</td>'
-        for i, c in enumerate(cols, start=1):
-            fcrit = stats.f.ppf(1 - alpha, r, c)
-            body_html += f'<td id="f_{r}_{i}">{fcrit:.2f}</td>'
-        body_html += "</tr>"
-
-    html = wrap_table(
-        CSS_BASE,
-        f"<tr><th>df₁＼df₂</th>{head_html}</tr>{body_html}"
-    )
-
-    if step >= 0:
-        for i in range(len(cols)+1):
-            html = style_cell(html, f"f_{df1}_{i}")
-    if step >= 1:
-        for r in rows:
-            html = style_cell(html, f"f_{r}_{col_idx}")
-    if step >= 2:
-        html = style_cell(html, f"f_{df1}_{col_idx}", color="blue", px=3)
-
+def build_f_html(df1:int,df2:int,alpha:float,step:int)->str:
+    rows=list(range(max(1,df1-5),df1+6))
+    cols=list(range(max(1,df2-5),df2+6)); col=cols.index(df2)+1
+    head="".join(f"<th>{c}</th>" for c in cols)
+    body="".join(
+        "<tr>"+f'<td id="f_{r}_0">{r}</td>'+
+        "".join(f'<td id="f_{r}_{i}">{stats.f.ppf(1-alpha,r,c):.2f}</td>'
+                for i,c in enumerate(cols,1))+"</tr>"
+        for r in rows)
+    html=wrap_table(CSS_BASE,f"<tr><th>df₁＼df₂</th>{head}</tr>{body}")
+    if step>=0:
+        for i in range(len(cols)+1): html=style_cell(html,f"f_{df1}_{i}")
+    if step>=1:
+        for r in rows: html=style_cell(html,f"f_{r}_{col}")
+    if step>=2:
+        html=style_cell(html,f"f_{df1}_{col}",color="blue",px=3)
     return html
 
 # ....................................... table wrapper
@@ -491,34 +455,24 @@ def plot_chi(chi_calc, df, alpha):
     return fig
 
 # ....................................... animated table builder
-def build_chi_html(df: int, alpha: float, step: int) -> str:
-    rows = list(range(max(1, df-5), df+6))
-    alphas = [0.10, 0.05, 0.01, 0.001]
-    col_idx = alphas.index(alpha) + 1
-
-    head_html = "".join(f"<th>{a}</th>" for a in alphas)
-    body_html = ""
-    for r in rows:
-        body_html += f'<tr><td id="chi_{r}_0">{r}</td>'
-        for i, a in enumerate(alphas, start=1):
-            body_html += f'<td id="chi_{r}_{i}">{stats.chi2.ppf(1 - a, r):.2f}</td>'
-        body_html += "</tr>"
-
-    html = wrap_table(
-        CSS_BASE,
-        f"<tr><th>df＼α</th>{head_html}</tr>{body_html}"
-    )
-
-    if step >= 0:
-        for i in range(len(alphas)+1):
-            html = style_cell(html, f"chi_{df}_{i}")
-    if step >= 1:
-        for r in rows:
-            html = style_cell(html, f"chi_{r}_{col_idx}")
-    if step >= 2:
-        html = style_cell(html, f"chi_{df}_{col_idx}", color="blue", px=3)
-
+def build_chi_html(df:int,alpha:float,step:int)->str:
+    rows=list(range(max(1,df-5),df+6)); alphas=[0.10,0.05,0.01,0.001]
+    col=alphas.index(alpha)+1
+    head="".join(f"<th>{a}</th>" for a in alphas)
+    body="".join(
+        "<tr>"+f'<td id="chi_{r}_0">{r}</td>'+
+        "".join(f'<td id="chi_{r}_{i}">{stats.chi2.ppf(1-a,r):.2f}</td>'
+                for i,a in enumerate(alphas,1))+"</tr>"
+        for r in rows)
+    html=wrap_table(CSS_BASE,f"<tr><th>df＼α</th>{head}</tr>{body}")
+    if step>=0:
+        for i in range(len(alphas)+1): html=style_cell(html,f"chi_{df}_{i}")
+    if step>=1:
+        for r in rows: html=style_cell(html,f"chi_{r}_{col}")
+    if step>=2:
+        html=style_cell(html,f"chi_{df}_{col}",color="blue",px=3)
     return html
+
 
 # ....................................... table wrapper
 def chi_table(df: int, alpha: float):
@@ -616,33 +570,22 @@ def plot_u(u_calc, n1, n2, alpha, tail):
     return fig
 
 # ....................................... animated table builder
-def build_u_html(n1: int, n2: int, alpha: float, tail: str, step: int) -> str:
-    rows = list(range(max(2, n1-5), n1+6))
-    cols = list(range(max(2, n2-5), n2+6))
-    col_idx = cols.index(n2) + 1
-
-    head_html = "".join(f"<th>{c}</th>" for c in cols)
-    body_html = ""
-    for r in rows:
-        body_html += f'<tr><td id="u_{r}_0">{r}</td>'
-        for i, c in enumerate(cols, start=1):
-            body_html += f'<td id="u_{r}_{i}">{u_crit(r, c, alpha, tail)}</td>'
-        body_html += "</tr>"
-
-    html = wrap_table(
-        CSS_BASE,
-        f"<tr><th>n₁＼n₂</th>{head_html}</tr>{body_html}"
-    )
-
-    if step >= 0:
-        for i in range(len(cols)+1):
-            html = style_cell(html, f"u_{n1}_{i}")
-    if step >= 1:
-        for r in rows:
-            html = style_cell(html, f"u_{r}_{col_idx}")
-    if step >= 2:
-        html = style_cell(html, f"u_{n1}_{col_idx}", color="blue", px=3)
-
+def build_u_html(n1:int,n2:int,alpha:float,tail:str,step:int)->str:
+    rows=list(range(max(2,n1-5),n1+6)); cols=list(range(max(2,n2-5),n2+6))
+    col=cols.index(n2)+1
+    head="".join(f"<th>{c}</th>" for c in cols)
+    body="".join(
+        "<tr>"+f'<td id="u_{r}_0">{r}</td>'+
+        "".join(f'<td id="u_{r}_{i}">{u_crit(r,c,alpha,tail)}</td>'
+                for i,c in enumerate(cols,1))+"</tr>"
+        for r in rows)
+    html=wrap_table(CSS_BASE,f"<tr><th>n₁＼n₂</th>{head}</tr>{body}")
+    if step>=0:
+        for i in range(len(cols)+1): html=style_cell(html,f"u_{n1}_{i}")
+    if step>=1:
+        for r in rows: html=style_cell(html,f"u_{r}_{col}")
+    if step>=2:
+        html=style_cell(html,f"u_{n1}_{col}",color="blue",px=3)
     return html
 
 # ....................................... table wrapper
@@ -751,33 +694,22 @@ def plot_w(t_calc, n, alpha, tail):
     return fig
 
 # ....................................... animated table builder
-def build_w_html(n: int, alpha: float, tail: str, step: int) -> str:
-    rows = list(range(max(5, n-5), n+6))
-    alphas = [0.10, 0.05, 0.01, 0.001]
-    col_idx = alphas.index(alpha) + 1
-
-    head_html = "".join(f"<th>{a}</th>" for a in alphas)
-    body_html = ""
-    for r in rows:
-        body_html += f'<tr><td id="w_{r}_0">{r}</td>'
-        for i, a in enumerate(alphas, start=1):
-            body_html += f'<td id="w_{r}_{i}">{w_crit(r, a, tail)}</td>'
-        body_html += "</tr>"
-
-    html = wrap_table(
-        CSS_BASE,
-        f"<tr><th>N＼α</th>{head_html}</tr>{body_html}"
-    )
-
-    if step >= 0:
-        for i in range(len(alphas)+1):
-            html = style_cell(html, f"w_{n}_{i}")
-    if step >= 1:
-        for r in rows:
-            html = style_cell(html, f"w_{r}_{col_idx}")
-    if step >= 2:
-        html = style_cell(html, f"w_{n}_{col_idx}", color="blue", px=3)
-
+def build_w_html(n:int,alpha:float,tail:str,step:int)->str:
+    rows=list(range(max(5,n-5),n+6)); alphas=[0.10,0.05,0.01,0.001]
+    col=alphas.index(alpha)+1
+    head="".join(f"<th>{a}</th>" for a in alphas)
+    body="".join(
+        "<tr>"+f'<td id="w_{r}_0">{r}</td>'+
+        "".join(f'<td id="w_{r}_{i}">{w_crit(r,a,tail)}</td>'
+                for i,a in enumerate(alphas,1))+"</tr>"
+        for r in rows)
+    html=wrap_table(CSS_BASE,f"<tr><th>N＼α</th>{head}</tr>{body}")
+    if step>=0:
+        for i in range(len(alphas)+1): html=style_cell(html,f"w_{n}_{i}")
+    if step>=1:
+        for r in rows: html=style_cell(html,f"w_{r}_{col}")
+    if step>=2:
+        html=style_cell(html,f"w_{n}_{col}",color="blue",px=3)
     return html
 
 # ....................................... table wrapper
@@ -877,33 +809,20 @@ def plot_binom(k, n, p):
     return fig
 
 # ....................................... animated table builder
-def build_b_html(k: int, n: int, p: float, step: int) -> str:
-    k_vals = list(range(max(0, k-5), min(n, k+5)+1))
-
-    head_html = "<th>P(X=k)</th><th>P(X≤k)</th><th>P(X≥k)</th>"
-    body_html = ""
-    for kv in k_vals:
-        pmf = stats.binom.pmf(kv, n, p)
-        cdf = stats.binom.cdf(kv, n, p)
-        sf = 1 - stats.binom.cdf(kv-1, n, p)
-        body_html += (
-            f'<tr><td id="b_{kv}_0">{kv}</td>'
-            f'<td id="b_{kv}_1">{pmf:.4f}</td>'
-            f'<td id="b_{kv}_2">{cdf:.4f}</td>'
-            f'<td id="b_{kv}_3">{sf :.4f}</td></tr>'
-        )
-
-    html = wrap_table(
-        CSS_BASE,
-        f"<tr><th>k</th>{head_html}</tr>{body_html}"
-    )
-
-    if step >= 0:
-        for i in range(4):
-            html = style_cell(html, f"b_{k}_{i}")
-    if step >= 1:
-        html = style_cell(html, f"b_{k}_1", color="blue", px=3)
-
+def build_b_html(k:int,n:int,p:float,step:int)->str:
+    k_vals=list(range(max(0,k-5),min(n,k+5)+1))
+    head="<th>P(X=k)</th><th>P(X≤k)</th><th>P(X≥k)</th>"
+    body="".join(
+        "<tr>"+f'<td id="b_{kv}_0">{kv}</td>'+
+        f'<td id="b_{kv}_1">{stats.binom.pmf(kv,n,p):.4f}</td>'+
+        f'<td id="b_{kv}_2">{stats.binom.cdf(kv,n,p):.4f}</td>'+
+        f'<td id="b_{kv}_3">{1-stats.binom.cdf(kv-1,n,p):.4f}</td></tr>'
+        for kv in k_vals)
+    html=wrap_table(CSS_BASE,f"<tr><th>k</th>{head}</tr>{body}")
+    if step>=0:
+        for i in range(4): html=style_cell(html,f"b_{k}_{i}")
+    if step>=1:
+        html=style_cell(html,f"b_{k}_1",color="blue",px=3)
     return html
 
 # ....................................... table wrapper
