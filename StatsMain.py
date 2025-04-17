@@ -1216,7 +1216,7 @@ def tab_binom():
 
 def main():
     st.set_page_config("PSYC250 – Statistical Tables Explorer", layout="wide")
-    st.title("PSYC250 – Statistical Tables Explorer (12×4 figures)")
+    st.title("Oli's – Statistical Table Explorer")
 
     tabs = st.tabs([
         "t‑Dist", "z‑Dist", "F‑Dist", "Chi‑Square",
