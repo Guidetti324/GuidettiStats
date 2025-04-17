@@ -3,11 +3,10 @@
 #  ---------------------------------------------------------------------------
 #  Seven complete tabs (t, z, F, Chi‑Sq, Mann‑Whitney U, Wilcoxon T, Binomial)
 #
-#  Fix for animation AttributeError:
-#   • Removed st.experimental_rerun() calls, relying on Streamlit's normal
-#     re-run-on-button-click behavior.
-#   • Everything else unchanged.
-#
+#  Fixes:
+#   • Removed any '₀' subscript usage (replace with plain "H0").
+#   • Removed st.experimental_rerun() calls.
+#   • Otherwise same row→col→cell “Next Step” highlighting animation.
 ###############################################################################
 
 import streamlit as st
@@ -48,21 +47,20 @@ def container(html: str, *, height: int = 460) -> str:
 
 def multi_step(build_html, frames: int, *, key: str, height: int = 460):
     """
-    Display the table in multiple highlight steps (row -> col -> cell).
-    No st.experimental_rerun() calls, relying on normal re-run behavior.
+    Display a table with stepwise highlight (row→column→cell).
+    No st.experimental_rerun() calls, relying on normal re-run from widget clicks.
     """
     if key not in st.session_state:
         st.session_state[key] = 0
 
     step = st.session_state[key]
-    # Render the table at the current step
     st.markdown(container(build_html(step), height=height), unsafe_allow_html=True)
 
     # Step controls
     c1, c2 = st.columns(2)
     if step < frames - 1:
         if c1.button("Next Step", key=f"{key}_next"):
-            # Just increment the step; Streamlit will rerun automatically.
+            # just increment, let Streamlit re-run
             st.session_state[key] += 1
     else:
         c1.success("All steps complete!")
@@ -78,9 +76,9 @@ CSS_BASE = (
     "th{background:#fafafa}"
 )
 
-# ─────────────────────────────────────────────────────────────────────────────
-#  t-Distribution Example
-# ─────────────────────────────────────────────────────────────────────────────
+# ════════════════════════════════════════════════════════════════════════════
+#  TAB 1 • t‑Distribution
+# ════════════════════════════════════════════════════════════════════════════
 
 def plot_t(t_calc, df, alpha, tail):
     fig, ax = plt.subplots(figsize=(12, 4), dpi=100)
@@ -88,32 +86,33 @@ def plot_t(t_calc, df, alpha, tail):
     ys = stats.t.pdf(xs, df)
 
     ax.plot(xs, ys, "k")
+    # Replace "Fail to Reject H₀" → "Fail to Reject H0" to avoid unicode issues
     ax.fill_between(xs, ys, color="lightgrey", alpha=0.25,
-                    label="Fail to Reject H₀")
+                    label="Fail to Reject H0")
     labels = []
 
     if tail.startswith("one"):
         crit = stats.t.ppf(1 - alpha, df)
         ax.fill_between(xs[xs >= crit], ys[xs >= crit],
-                        color="red", alpha=0.30, label="Reject H₀")
+                        color="red", alpha=0.30, label="Reject H0")
         ax.axvline(crit, color="green", ls="--")
         place_label(ax, labels, crit, stats.t.pdf(crit, df) + 0.02,
-                    f"t₍crit₎={crit:.2f}", color="green")
+                    f"tcrit={crit:.2f}", color="green")
     else:
         crit = stats.t.ppf(1 - alpha/2, df)
         ax.fill_between(xs[xs >= crit], ys[xs >= crit], color="red", alpha=0.30)
         ax.fill_between(xs[xs <= -crit], ys[xs <= -crit],
-                        color="red", alpha=0.30, label="Reject H₀")
+                        color="red", alpha=0.30, label="Reject H0")
         ax.axvline(crit, color="green", ls="--")
         ax.axvline(-crit, color="green", ls="--")
         place_label(ax, labels, crit, stats.t.pdf(crit, df) + 0.02,
-                    f"+t₍crit₎={crit:.2f}", color="green")
+                    f"+tcrit={crit:.2f}", color="green")
         place_label(ax, labels, -crit, stats.t.pdf(-crit, df) + 0.02,
-                    f"–t₍crit₎={crit:.2f}", color="green")
+                    f"–tcrit={crit:.2f}", color="green")
 
     ax.axvline(t_calc, color="blue", ls="--")
     place_label(ax, labels, t_calc, stats.t.pdf(t_calc, df) + 0.02,
-                f"t₍calc₎={t_calc:.2f}", color="blue")
+                f"tcalc={t_calc:.2f}", color="blue")
 
     ax.set_xlabel("t")
     ax.set_ylabel("Density")
@@ -144,12 +143,13 @@ def build_t_html(df: int, alpha: float, tail: str, step: int) -> str:
 
     html = wrap_table(CSS_BASE, f"<tr><th>df</th>{head}</tr>{body}")
 
+    # Step highlighting
     if step >= 0:
         for i in range(len(heads)+1):
             html = style_cell(html, f"t_{df}_{i}", color="red", px=2)
     if step >= 1:
-        for r in rows:
-            html = style_cell(html, f"t_{r}_{col}", color="red", px=2)
+        for rr in rows:
+            html = style_cell(html, f"t_{rr}_{col}", color="red", px=2)
     if step >= 2:
         html = style_cell(html, f"t_{df}_{col}", color="blue", px=3,
                           bg="#cce5ff")
@@ -179,9 +179,9 @@ def t_apa(t_val: float, df: int, alpha: float, tail: str):
     st.markdown(
         "**APA interpretation**  \n"
         f"Calculated statistic: *t*({df}) = {t_val:.2f}, *p* = {p_calc:.3f}.  \n"
-        f"Critical statistic: t₍crit₎ = {crit:.2f}, *p* = {p_crit:.3f}.  \n"
-        f"Comparison of statistics → H₀ **{decision}**.  \n"
-        f"Comparison of *p*‑values → H₀ **{decision}**.  \n"
+        f"Critical statistic: tcrit = {crit:.2f}, *p* = {p_crit:.3f}.  \n"
+        f"Comparison of statistics → H0 **{decision}**.  \n"
+        f"Comparison of *p*‑values → H0 **{decision}**.  \n"
         f"**APA 7 report:** *t*({df}) = {t_val:.2f}, *p* = {p_calc:.3f} "
         f"({tail}). The null hypothesis was **{decision}** at α = {alpha:.2f}."
     )
@@ -209,9 +209,11 @@ def tab_t():
 
 def main():
     st.set_page_config("PSYC250 – Statistical Tables Explorer", layout="wide")
-    st.title("PSYC250 – Statistical Tables Explorer (12×4 figures)")
+    st.title("PSYC250 – Statistical Tables Explorer (12×4 figures)")
 
-    tab_t()  # For brevity, only show the t-distribution example.
+    # For brevity, just show t-dist
+    tab_t()
+
 
 if __name__ == "__main__":
     main()
