@@ -1,5 +1,5 @@
 ###############################################################################
-#  PSYC‑250 – Statistical Tables Explorer (Streamlit, 12×4‑inch figures)
+#  PSYC‑250 – Statistical Tables Explorer
 #  ---------------------------------------------------------------------------
 #  Seven complete tabs:
 #      1) t‑Distribution           4) Chi‑Square
@@ -7,24 +7,17 @@
 #      3) F‑Distribution           6) Wilcoxon Signed‑Rank T
 #      7) Binomial
 #
-#  NEW FEATURES (only in t, z, Mann‑Whitney U, Wilcoxon T, Binomial):
-#   1) Next to each table: "Cumulative Table Note" about how to interpret
-#      the cumulative probabilities for one‑ vs. two‑tailed tests.
-#   2) A "P‑Value Calculation Explanation" section showing how the table
-#      lookup leads to the final p‑value, depending on one‑ vs. two‑tailed,
-#      and (for one‑tailed) on the sign of the test statistic.
-#   3) The plot shading automatically adjusts:
-#        - For one‑tailed, if the test statistic is positive, shade the
-#          right tail; if negative, shade the left tail.
-#        - For two‑tailed, shade both tails.
-#      We skip the “direction” radio button; we just use the sign
-#      of the test statistic in one‑tailed mode.
+#  NEW FEATURES ADDED FOR (t, z, Mann‑Whitney U, Wilcoxon T, Binomial):
+#   1) A "Cumulative Table Note" explaining how to interpret the table for
+#      one‑ vs. two‑tailed tests.
+#   2) A "P‑Value Calculation Explanation" section next to the table,
+#      showing how the table lookup leads to p, depending on one‑ vs. two‑tailed.
+#   3) Automatic plot shading based on sign of the test statistic for one‑tailed
+#      (negative → left tail, positive → right tail). For two‑tailed, shade both tails.
 #
-#  F‑Distribution and Chi‑Square remain the same, with no new note or p‑value
-#  explanation, because they are always one‑tailed.
+#  F‑Distribution and Chi‑Square remain as before, since they are always one‑tailed.
 #
-#  This code is fully integrated. Just copy it into app.py and run:
-#      streamlit run app.py
+#  To run:   streamlit run app.py
 ###############################################################################
 
 import streamlit as st
@@ -35,8 +28,23 @@ from scipy import stats
 plt.switch_backend("Agg")  # headless backend
 
 ###############################################################################
-#                               HELPER FUNCTIONS
+#                                COMMON SETUP
 ###############################################################################
+
+def show_cumulative_note():
+    """
+    Shows the standardized cumulative probability note (for z, t, Mann-Whitney, 
+    Wilcoxon, and Binomial).
+    """
+    st.info(
+        "Note: The values in this table represent cumulative probabilities "
+        "(i.e., the area under the curve to the left of a given value). For "
+        "one‑tailed tests, use the area directly. For two‑tailed tests, you must "
+        "double the area in the tail beyond your observed value (i.e., "
+        "p=2×(1−P(Z≤|z|))). The same logic applies for t‑distributions. The table "
+        "itself does not change—only how you interpret it does."
+    )
+
 
 def place_label(ax, placed, x, y, txt, *, color="blue"):
     """
@@ -89,8 +97,8 @@ CSS_BASE = (
 
 def plot_t(t_calc, df, alpha, tail):
     """
-    Plot the t‑distribution. For one‑tailed, we decide left vs. right tail
-    based on the sign of t_calc. For two‑tailed, shade both tails.
+    Plot the t‑distribution. For one‑tailed, decide left vs. right tail
+    based on sign of t_calc. For two‑tailed, shade both tails.
     """
     fig, ax = plt.subplots(figsize=(12, 4), dpi=100)
     xs = np.linspace(-4, 4, 400)
@@ -102,13 +110,11 @@ def plot_t(t_calc, df, alpha, tail):
 
     placed_labels = []
 
-    # figure out sign for one-tailed
     if tail.startswith("one"):
-        # critical value (always positive if we interpret alpha as upper tail)
+        # For one-tailed: decide which side based on sign of t_calc
         crit_pos = stats.t.ppf(1 - alpha, df)
         crit_neg = -crit_pos
 
-        # Decide which side to shade based on t_calc sign
         if t_calc >= 0:
             # shade right side
             ax.fill_between(xs[xs >= crit_pos], ys[xs >= crit_pos],
@@ -136,7 +142,6 @@ def plot_t(t_calc, df, alpha, tail):
         place_label(ax, placed_labels, -crit, stats.t.pdf(-crit, df)+0.02,
                     f"–tcrit={crit:.2f}", color="green")
 
-    # always show the test statistic line
     ax.axvline(t_calc, color="blue", ls="--")
     place_label(ax, placed_labels, t_calc, stats.t.pdf(t_calc, df)+0.02,
                 f"tcalc={t_calc:.2f}", color="blue")
@@ -189,35 +194,22 @@ def t_table(df: int, alpha: float, tail: str):
     code = build_t_html(df, alpha, tail)
     st.markdown(container(code), unsafe_allow_html=True)
 
-    # Add the "Cumulative Table Note" (only for t, z, Mann–Whitney, Wilcoxon, Binomial)
-    st.info(
-        "Note: The values in this table represent cumulative probabilities "
-        "(i.e., the area under the curve to the left of a given value). "
-        "For one‑tailed tests, use the area directly. For two‑tailed tests, "
-        "you must double the area in the tail beyond your observed value "
-        "(i.e., p=2×(1−P( ≤ |value|))). The same logic applies for t-distributions. "
-        "The table itself does not change—only how you interpret it does."
-    )
-
 
 def t_apa(t_val: float, df: int, alpha: float, tail: str):
     """
-    APA block, plus the "P-value Calculation Explanation" for t.
-    We'll show how we'd get p from the table in principle.
+    Show the dynamic explanation and final APA lines for the t-distribution.
     """
-    # Calculate p and crit the "real" way
+    # Calculate p and critical value
     if tail.startswith("one"):
-        # interpret sign for the tail
         p_calc = stats.t.sf(abs(t_val), df)  # single-sided
         crit = stats.t.ppf(1 - alpha, df)
-        reject = (abs(t_val) > abs(crit)) if t_val<0 else (t_val > crit)
+        reject = (abs(t_val) > abs(crit)) if t_val < 0 else (t_val > crit)
     else:
-        p_calc = stats.t.sf(abs(t_val), df)*2
+        p_calc = stats.t.sf(abs(t_val), df) * 2
         crit = stats.t.ppf(1 - alpha/2, df)
-        reject = (abs(t_val)>crit)
+        reject = (abs(t_val) > crit)
 
     decision = "rejected" if reject else "failed to reject"
-
     if reject:
         reason_stats = "because t(calc) exceeded t(crit)"
         reason_p = "because p < α"
@@ -225,38 +217,32 @@ def t_apa(t_val: float, df: int, alpha: float, tail: str):
         reason_stats = "because t(calc) did not exceed t(crit)"
         reason_p = "because p ≥ α"
 
-    # Show the formula explanation (table-based p)
-    st.write("### P-value Calculation Explanation")
-    # We'll pretend we looked up P(T ≤ t_val) in the table:
-    cdf_val = stats.t.cdf(t_val, df)  # "table" value
-    explanation = ""
+    # "table" cdf value
+    cdf_val = stats.t.cdf(t_val, df)
+
+    # Explanation text
     if tail.startswith("one"):
-        # figure out if we use "1 - cdf_val" or just "cdf_val", depending on sign
         if t_val >= 0:
-            # area to right = 1 - cdf_val
-            explanation = (
-                f"Look up P(T ≤ {t_val:.2f}) = {cdf_val:.4f}.\n\n"
+            expl = (
+                f"Lookup: P(T ≤ {t_val:.2f}) = {cdf_val:.4f}.\n\n"
                 f"For a **one‑tailed** test with a positive statistic, "
                 f"p = 1 − {cdf_val:.4f} = {(1-cdf_val):.4f}."
             )
         else:
-            # negative statistic => area to the left is cdf_val
-            explanation = (
-                f"Look up P(T ≤ {t_val:.2f}) = {cdf_val:.4f}.\n\n"
+            expl = (
+                f"Lookup: P(T ≤ {t_val:.2f}) = {cdf_val:.4f}.\n\n"
                 f"For a **one‑tailed** test with a negative statistic, "
-                f"p = {cdf_val:.4f} (area in the left tail)."
+                f"p = {cdf_val:.4f} (left tail)."
             )
     else:
-        # two-tailed
-        explanation = (
-            f"Look up P(T ≤ {t_val:.2f}) = {cdf_val:.4f}.\n\n"
+        expl = (
+            f"Lookup: P(T ≤ {t_val:.2f}) = {cdf_val:.4f}.\n\n"
             f"For a **two‑tailed** test, p = 2 × min({cdf_val:.4f}, "
             f"{1-cdf_val:.4f}) = {2*min(cdf_val,1-cdf_val):.4f}."
         )
 
-    st.write(explanation)
+    st.write(expl)
 
-    # Finally, the usual APA lines
     st.markdown(
         "**APA interpretation**  \n"
         f"Calculated statistic: *t*({df})={t_val:.2f}, *p*={p_calc:.3f}.  \n"
@@ -284,8 +270,14 @@ def tab_t():
         st.pyplot(plot_t(t_val, df, alpha, tail))
 
     st.write("**t‑table** (single highlight)")
-    t_table(df, alpha, tail)
-    t_apa(t_val, df, alpha, tail)
+    # Table & note in left column, explanation in right column
+    ctable, cexp = st.columns([2,1])
+    with ctable:
+        t_table(df, alpha, tail)
+        show_cumulative_note()
+    with cexp:
+        st.subheader("P‑value Calculation Explanation")
+        t_apa(t_val, df, alpha, tail)
 
 
 ###############################################################################
@@ -308,18 +300,15 @@ def plot_z(z_calc, alpha, tail):
     placed = []
 
     if tail.startswith("one"):
-        # We'll interpret sign of z_calc
-        crit_pos = stats.norm.ppf(1 - alpha)  # positive
+        crit_pos = stats.norm.ppf(1 - alpha)
         crit_neg = -crit_pos
         if z_calc >= 0:
-            # shade right side
             ax.fill_between(xs[xs>=crit_pos], ys[xs>=crit_pos],
                             color="red", alpha=0.3, label="Reject H0")
             ax.axvline(crit_pos, color="green", ls="--")
             place_label(ax, placed, crit_pos, stats.norm.pdf(crit_pos)+0.02,
                         f"z₍crit₎={crit_pos:.2f}", color="green")
         else:
-            # shade left side
             ax.fill_between(xs[xs<=crit_neg], ys[xs<=crit_neg],
                             color="red", alpha=0.3, label="Reject H0")
             ax.axvline(crit_neg, color="green", ls="--")
@@ -355,25 +344,27 @@ def build_z_html(z_val: float, alpha: float, tail: str) -> str:
     """
     z_val = np.clip(z_val, -3.49, 3.49)
     row = np.floor(z_val*10)/10
-    col = round(z_val-row,2)
+    col = round(z_val-row, 2)
 
-    Rows = np.round(np.arange(-3.4,3.5,0.1),1)
-    Cols = np.round(np.arange(0,0.1,0.01),2)
+    Rows = np.round(np.arange(-3.4, 3.5, 0.1), 1)
+    Cols = np.round(np.arange(0, 0.1, 0.01), 2)
+
+    # find nearest col
     col = min(Cols, key=lambda c: abs(c - col))
 
-    idx_arr = np.where(Rows==row)[0]
-    if len(idx_arr)>0:
+    idx_arr = np.where(Rows == row)[0]
+    if len(idx_arr) > 0:
         irow = idx_arr[0]
     else:
         irow = len(Rows)//2
-    show_rows = Rows[max(0,irow-10):irow+11]
+    show_rows = Rows[max(0, irow-10): irow+11]
 
     head = "".join(f"<th>{c:.2f}</th>" for c in Cols)
     body = ""
     for rr in show_rows:
         row_html = f'<td id="z_{rr:.1f}_0">{rr:.1f}</td>'
         for cc in Cols:
-            cdf_val = stats.norm.cdf(rr+cc)
+            cdf_val = stats.norm.cdf(rr + cc)
             row_html += f'<td id="z_{rr:.1f}_{cc:.2f}">{cdf_val:.4f}</td>'
         body += f"<tr>{row_html}</tr>"
 
@@ -398,37 +389,24 @@ def z_table(z_val: float, alpha: float, tail: str):
     code = build_z_html(z_val, alpha, tail)
     st.markdown(container(code), unsafe_allow_html=True)
 
-    # cumulative table note:
-    st.info(
-        "Note: The values in this table represent cumulative probabilities "
-        "(area under the curve to the left). For one‑tailed tests, use "
-        "the area directly. For two‑tailed tests, you must double the area "
-        "beyond your observed z (p=2×(1−P(Z≤|z|))). This does not change "
-        "the table, only how you interpret it."
-    )
-
 
 def z_apa(z_val: float, alpha: float, tail: str):
     """
-    APA block + p-value calculation explanation for z.
+    Show the dynamic explanation and final APA lines for the z-distribution.
     """
     # Actual p
     if tail.startswith("one"):
-        # interpret sign for shading => but p
-        p_calc = stats.norm.sf(abs(z_val))  # single-sided tail
-    else:
-        p_calc = stats.norm.sf(abs(z_val))*2
-    # critical
-    if tail.startswith("one"):
+        p_calc = stats.norm.sf(abs(z_val))
         crit_pos = stats.norm.ppf(1 - alpha)
         crit_neg = -crit_pos
-        # no single "crit" so let's just define one for display
         crit = crit_pos if z_val>0 else crit_neg
+        reject = (abs(z_val) > abs(crit))
     else:
+        p_calc = stats.norm.sf(abs(z_val))*2
         crit = stats.norm.ppf(1 - alpha/2)
-    reject = (abs(z_val)>abs(crit)) if tail.startswith("one") else (abs(z_val)>crit)
-    decision = "rejected" if reject else "failed to reject"
+        reject = (abs(z_val) > crit)
 
+    decision = "rejected" if reject else "failed to reject"
     if reject:
         reason_stats = "because z₍calc₎ exceeded z₍crit₎"
         reason_p = "because p < α"
@@ -436,32 +414,29 @@ def z_apa(z_val: float, alpha: float, tail: str):
         reason_stats = "because z₍calc₎ did not exceed z₍crit₎"
         reason_p = "because p ≥ α"
 
-    # p-value explanation:
-    st.write("### P-value Calculation Explanation")
+    # table cdf
     table_val = stats.norm.cdf(z_val)
+    # explanation
     if tail.startswith("one"):
-        if z_val>=0:
-            # p=1-table_val
-            explanation = (
+        if z_val >= 0:
+            expl = (
                 f"Lookup: P(Z ≤ {z_val:.2f}) = {table_val:.4f}\n\n"
                 f"For a **one‑tailed** test with positive z, p = 1 − {table_val:.4f}"
             )
         else:
-            # negative => p=table_val
-            explanation = (
+            expl = (
                 f"Lookup: P(Z ≤ {z_val:.2f}) = {table_val:.4f}\n\n"
                 f"For a **one‑tailed** test with negative z, p = {table_val:.4f}"
             )
     else:
-        # two-tailed => p=2* min(table_val,1-table_val)
-        explanation = (
+        expl = (
             f"Lookup: P(Z ≤ {z_val:.2f}) = {table_val:.4f}\n\n"
             f"For a **two‑tailed** test, p = 2 × min({table_val:.4f}, "
-            f"{1-table_val:.4f})"
+            f"{1 - table_val:.4f})"
         )
-    st.write(explanation)
 
-    # final APA
+    st.write(expl)
+
     st.markdown(
         "**APA interpretation**  \n"
         f"Calculated statistic: *z*={z_val:.2f}, *p*={p_calc:.3f}.  \n"
@@ -475,6 +450,7 @@ def z_apa(z_val: float, alpha: float, tail: str):
 
 def tab_z():
     st.subheader("Tab 2 • z‑Distribution")
+
     c1, c2 = st.columns(2)
     with c1:
         z_val = st.number_input("z statistic", value=1.64, key="z_val")
@@ -487,12 +463,17 @@ def tab_z():
         st.pyplot(plot_z(z_val, alpha, tail))
 
     st.write("**z‑table** (single highlight)")
-    z_table(z_val, alpha, tail)
-    z_apa(z_val, alpha, tail)
+    ctable, cexp = st.columns([2,1])
+    with ctable:
+        z_table(z_val, alpha, tail)
+        show_cumulative_note()
+    with cexp:
+        st.subheader("P‑value Calculation Explanation")
+        z_apa(z_val, alpha, tail)
 
 
 ###############################################################################
-#                        TAB 3: F‑Distribution (unchanged note/p)
+#                        TAB 3: F‑Distribution (unchanged)
 ###############################################################################
 
 def plot_f(f_calc, df1, df2, alpha):
@@ -519,6 +500,7 @@ def plot_f(f_calc, df1, df2, alpha):
     ax.set_title(f"F‑Distribution (df1={df1}, df2={df2})")
     fig.tight_layout()
     return fig
+
 
 def build_f_table(df1: int, df2: int, alpha: float) -> str:
     rows = list(range(max(1,df1-5), df1+6))
@@ -547,9 +529,11 @@ def build_f_table(df1: int, df2: int, alpha: float) -> str:
     html = style_cell(html, f"f_{df1}_{col_idx}", color="blue", px=3)
     return html
 
+
 def f_table(df1: int, df2: int, alpha: float):
     code = build_f_table(df1, df2, alpha)
     st.markdown(container(code), unsafe_allow_html=True)
+
 
 def f_apa(f_val: float, df1: int, df2: int, alpha: float):
     p_calc = stats.f.sf(f_val, df1, df2)
@@ -570,8 +554,10 @@ def f_apa(f_val: float, df1: int, df2: int, alpha: float):
         f"The null hypothesis was **{decision}** at α={alpha:.2f}."
     )
 
+
 def tab_f():
     st.subheader("Tab 3 • F‑Distribution")
+
     c1, c2 = st.columns(2)
     with c1:
         f_val = st.number_input("F statistic", value=4.32, key="f_val")
@@ -590,7 +576,7 @@ def tab_f():
 
 
 ###############################################################################
-#                          TAB 4: Chi-Square
+#                          TAB 4: Chi-Square (unchanged)
 ###############################################################################
 
 def plot_chi(chi_calc, df, alpha):
@@ -667,6 +653,7 @@ def chi_apa(chi_val: float, df: int, alpha: float):
 
 def tab_chi():
     st.subheader("Tab 4 • Chi‑Square")
+
     c1, c2 = st.columns(2)
     with c1:
         chi_val = st.number_input("χ² statistic", value=7.88, key="chi_val")
@@ -684,14 +671,13 @@ def tab_chi():
 
 
 ###############################################################################
-#                   TAB 5: Mann‑Whitney U
+#                   TAB 5: Mann‑Whitney U (updated)
 ###############################################################################
 
 def plot_u(u_calc, n1, n2, alpha, tail):
     """
-    We'll interpret sign in a similar sense, but U is typically >=0. We'll
-    just show 'right tail' if Ucalc > mu. If Ucalc < mu => left tail
-    for one‑tailed. For two‑tailed, shade both sides from crit.
+    Normal approx. We'll interpret sign around the midpoint (mu) to decide
+    shading for one-tailed. For two-tailed, shade both tails.
     """
     μ = n1*n2/2
     σ = np.sqrt(n1*n2*(n1+n2+1)/12)
@@ -704,31 +690,34 @@ def plot_u(u_calc, n1, n2, alpha, tail):
     ax.fill_between(xs, ys, color="lightgrey", alpha=0.25,
                     label="Fail to Reject H0")
 
-    # critical
     from math import floor
     zcrit = stats.norm.ppf(alpha if tail.startswith("one") else alpha/2)
-    # normal approximation
     crit_val = floor(μ + zcrit*σ)
     hi_val = n1*n2 - crit_val
 
     if tail.startswith("one"):
-        # sign-based: if Ucalc >= μ => shade right tail, else left
         if u_calc >= μ:
-            # shade right tail => a bit contrived since U≥0, but let's do it
             ax.fill_between(xs[xs>=crit_val], ys[xs>=crit_val], color="red", alpha=0.3,
                             label="Reject H0")
             ax.axvline(crit_val, color="green", ls="--")
+            place_label(ax, [], crit_val, stats.norm.pdf(crit_val, μ, σ)+0.02,
+                        f"Ucrit={crit_val}", color="green")
         else:
             ax.fill_between(xs[xs<=crit_val], ys[xs<=crit_val], color="red", alpha=0.3,
                             label="Reject H0")
             ax.axvline(crit_val, color="green", ls="--")
+            place_label(ax, [], crit_val, stats.norm.pdf(crit_val, μ, σ)+0.02,
+                        f"Ucrit={crit_val}", color="green")
     else:
-        # two-tailed => shade both from crit_val and hi_val
         ax.fill_between(xs[xs<=crit_val], ys[xs<=crit_val], color="red", alpha=0.3)
         ax.fill_between(xs[xs>=hi_val], ys[xs>=hi_val], color="red", alpha=0.3,
                         label="Reject H0")
         ax.axvline(crit_val, color="green", ls="--")
         ax.axvline(hi_val, color="green", ls="--")
+        place_label(ax, [], crit_val, stats.norm.pdf(crit_val, μ, σ)+0.02,
+                    f"Ucrit={crit_val}", color="green")
+        place_label(ax, [], hi_val, stats.norm.pdf(hi_val, μ, σ)+0.02,
+                    f"Ucrit={hi_val}", color="green")
 
     ax.axvline(u_calc, color="blue", ls="--")
     place_label(ax, [], u_calc, stats.norm.pdf(u_calc, μ, σ)+0.02,
@@ -743,17 +732,16 @@ def plot_u(u_calc, n1, n2, alpha, tail):
 
 
 def u_crit(n1:int, n2:int, alpha:float, tail:str)->int:
-    """
-    Normal approximation approach from original code.
-    """
     μ = n1*n2/2
     σ = np.sqrt(n1*n2*(n1+n2+1)/12)
+    from math import floor
     z = stats.norm.ppf(alpha if tail.startswith("one") else alpha/2)
-    return int(np.floor(μ + z*σ))
+    return int(floor(μ + z*σ))
+
 
 def build_u_table(n1:int, n2:int, alpha:float, tail:str)->str:
-    rows = list(range(max(2,n1-5),n1+6))
-    cols = list(range(max(2,n2-5),n2+6))
+    rows = list(range(max(2,n1-5), n1+6))
+    cols = list(range(max(2,n2-5), n2+6))
     col_idx = cols.index(n2)+1
 
     head = "".join(f"<th>{c}</th>" for c in cols)
@@ -768,7 +756,7 @@ def build_u_table(n1:int, n2:int, alpha:float, tail:str)->str:
     code = f"<tr><th>n1\\n2</th>{head}</tr>{body}"
     html = wrap_table(CSS_BASE, code)
 
-    # highlight row, column, intersection
+    # highlight row, col, intersection
     for i in range(len(cols)+1):
         html = style_cell(html, f"u_{n1}_{i}")
     for rr in rows:
@@ -776,47 +764,38 @@ def build_u_table(n1:int, n2:int, alpha:float, tail:str)->str:
     html = style_cell(html, f"u_{n1}_{col_idx}", color="blue", px=3)
     return html
 
+
 def u_table(n1:int, n2:int, alpha:float, tail:str):
     code = build_u_table(n1,n2,alpha,tail)
     st.markdown(container(code), unsafe_allow_html=True)
 
-    # cumulative note
-    st.info(
-        "Note: The values in this table represent cumulative probabilities. "
-        "For one‑tailed Mann–Whitney tests, use that area directly if U is on "
-        "the right side; otherwise, interpret the left tail area. For two‑tailed, "
-        "double the tail area beyond U. The table doesn't change—just how you use it."
-    )
 
 def u_apa(u_val: int, n1: int, n2: int, alpha: float, tail: str):
     """
-    Show the p-value explanation and final APA lines.
+    Show dynamic explanation and final APA lines for Mann‑Whitney U.
     """
-    # "Real" approximate p
     μ = n1*n2/2
     σ = np.sqrt(n1*n2*(n1+n2+1)/12)
+
+    # sign-based approach for one-tailed
     if tail.startswith("one"):
-        # sign-based approach
         if u_val >= μ:
-            # right side => p = 1 - cdf
             p_calc = 1 - stats.norm.cdf((u_val-μ)/σ)
         else:
-            # left side => p = cdf
             p_calc = stats.norm.cdf((u_val-μ)/σ)
     else:
-        # two-tailed => p=2*min( cdf, 1-cdf ) of (u_val-μ)/σ
         raw = stats.norm.cdf((u_val-μ)/σ)
         p_calc = 2*min(raw, 1-raw)
 
-    # compare with crit
     cval = u_crit(n1,n2,alpha,tail)
+    # rejection region depends on sign
     if tail.startswith("one"):
-        # sign-based
-        reject = (u_val<=cval) if u_val<μ else (u_val>=cval)
+        reject = (u_val <= cval) if u_val < μ else (u_val >= cval)
     else:
-        reject = (u_val<=cval) or (u_val>=n1*n2-cval)
-    decision = "rejected" if reject else "failed to reject"
+        hi = n1*n2 - cval
+        reject = (u_val <= cval) or (u_val >= hi)
 
+    decision = "rejected" if reject else "failed to reject"
     if reject:
         reason_stats = "because U₍calc₎ was in the rejection region"
         reason_p = "because p < α"
@@ -824,30 +803,27 @@ def u_apa(u_val: int, n1: int, n2: int, alpha: float, tail: str):
         reason_stats = "because U₍calc₎ was not in the rejection region"
         reason_p = "because p ≥ α"
 
-    # "P-value Calculation Explanation"
-    st.write("### P-value Calculation Explanation")
-    # pretend we do a "table lookup" for P(U ≤ u_val)
-    # approximate that with normal cdf
+    # table-based explanation
     normal_cdf_val = stats.norm.cdf((u_val-μ)/σ)
     if tail.startswith("one"):
         if u_val>=μ:
-            # p=1 - cdf
-            st.write(
+            expl = (
                 f"Lookup: P(U ≤ {u_val}) ~ {normal_cdf_val:.4f}, "
-                "but U is on the right side, so p = 1 - that."
+                f"but U > mean ⇒ p = 1 − {normal_cdf_val:.4f}"
             )
         else:
-            st.write(
-                f"Lookup: P(U ≤ {u_val}) ~ {normal_cdf_val:.4f}, "
-                "U is on the left side, so p = that value."
+            expl = (
+                f"Lookup: P(U ≤ {u_val}) ~ {normal_cdf_val:.4f}. "
+                f"U < mean ⇒ p = {normal_cdf_val:.4f}"
             )
     else:
-        st.write(
+        expl = (
             f"Lookup: P(U ≤ {u_val}) ~ {normal_cdf_val:.4f}. "
-            f"For two‑tailed, p = 2×min({normal_cdf_val:.4f}, {1-normal_cdf_val:.4f})."
+            f"For two‑tailed ⇒ p = 2 × min({normal_cdf_val:.4f}, {1 - normal_cdf_val:.4f})."
         )
 
-    # final APA
+    st.write(expl)
+
     st.markdown(
         "**APA interpretation**  \n"
         f"Calculated statistic: *U*={u_val}, *p*={p_calc:.3f}.  \n"
@@ -858,8 +834,10 @@ def u_apa(u_val: int, n1: int, n2: int, alpha: float, tail: str):
         f"({tail}). The null hypothesis was **{decision}** at α={alpha:.2f}."
     )
 
+
 def tab_u():
     st.subheader("Tab 5 • Mann‑Whitney U")
+
     c1, c2 = st.columns(2)
     with c1:
         u_val = st.number_input("U statistic", value=23, key="u_val")
@@ -874,19 +852,26 @@ def tab_u():
         st.pyplot(plot_u(u_val, n1, n2, alpha, tail))
 
     st.write("**U‑table** (single highlight)")
-    u_table(n1, n2, alpha, tail)
-    u_apa(u_val, n1, n2, alpha, tail)
+    ctable, cexp = st.columns([2,1])
+    with ctable:
+        u_table(n1, n2, alpha, tail)
+        show_cumulative_note()
+    with cexp:
+        st.subheader("P‑value Calculation Explanation")
+        u_apa(u_val, n1, n2, alpha, tail)
 
 
 ###############################################################################
-#                    TAB 6: Wilcoxon Signed‑Rank T
+#                    TAB 6: Wilcoxon Signed‑Rank T (unchanged note/p)
 ###############################################################################
 
 def w_crit(n: int, alpha: float, tail: str)->int:
     μ = n*(n+1)/4
     σ = np.sqrt(n*(n+1)*(2*n+1)/24)
+    from math import floor
     z = stats.norm.ppf(alpha if tail.startswith("one") else alpha/2)
-    return int(np.floor(μ + z*σ))
+    return int(floor(μ + z*σ))
+
 
 def plot_w(t_calc, n, alpha, tail):
     μ = n*(n+1)/4
@@ -903,26 +888,32 @@ def plot_w(t_calc, n, alpha, tail):
     hi_val = n*(n+1)//2 - crit_val
 
     if tail.startswith("one"):
-        # sign => if t_calc>μ => shade right, else left
         if t_calc>=μ:
             ax.fill_between(xs[xs>=crit_val], ys[xs>=crit_val], color="red", alpha=0.3,
                             label="Reject H0")
             ax.axvline(crit_val, color="green", ls="--")
+            place_label(ax, [], crit_val, stats.norm.pdf(crit_val, μ, σ)+0.02,
+                        f"Tcrit={crit_val}", color="green")
         else:
             ax.fill_between(xs[xs<=crit_val], ys[xs<=crit_val], color="red", alpha=0.3,
                             label="Reject H0")
             ax.axvline(crit_val, color="green", ls="--")
+            place_label(ax, [], crit_val, stats.norm.pdf(crit_val, μ, σ)+0.02,
+                        f"Tcrit={crit_val}", color="green")
     else:
-        # two-tailed => shade <=crit and >= hi_val
         ax.fill_between(xs[xs<=crit_val], ys[xs<=crit_val], color="red", alpha=0.3)
         ax.fill_between(xs[xs>=hi_val], ys[xs>=hi_val], color="red", alpha=0.3,
                         label="Reject H0")
         ax.axvline(crit_val, color="green", ls="--")
         ax.axvline(hi_val, color="green", ls="--")
+        place_label(ax, [], crit_val, stats.norm.pdf(crit_val, μ, σ)+0.02,
+                    f"Tcrit={crit_val}", color="green")
+        place_label(ax, [], hi_val, stats.norm.pdf(hi_val, μ, σ)+0.02,
+                    f"Tcrit={hi_val}", color="green")
 
     ax.axvline(t_calc, color="blue", ls="--")
     place_label(ax, [], t_calc, stats.norm.pdf(t_calc, μ, σ)+0.02,
-                f"T₍calc₎={t_calc}", color="blue")
+                f"Tcalc={t_calc}", color="blue")
 
     ax.set_xlabel("T")
     ax.set_ylabel("Approx. density")
@@ -930,6 +921,7 @@ def plot_w(t_calc, n, alpha, tail):
     ax.set_title("Wilcoxon Signed‑Rank T")
     fig.tight_layout()
     return fig
+
 
 def build_w_html(n:int, alpha:float, tail:str)->str:
     rows = list(range(max(5,n-5), n+6))
@@ -958,27 +950,19 @@ def build_w_html(n:int, alpha:float, tail:str)->str:
     html = style_cell(html, f"w_{n}_{col_idx}", color="blue", px=3)
     return html
 
+
 def w_table(n:int, alpha:float, tail:str):
     code = build_w_html(n, alpha, tail)
     st.markdown(container(code), unsafe_allow_html=True)
 
-    st.info(
-        "Note: The table's values represent cumulative probabilities. For a "
-        "Wilcoxon T one‑tailed test, interpret the left or right tail based on "
-        "whether T is above or below the midpoint. For two‑tailed, double the "
-        "tail area beyond T. The table remains the same; the interpretation changes."
-    )
 
 def w_apa(t_val: int, n: int, alpha: float, tail: str):
     μ = n*(n+1)/4
     σ = np.sqrt(n*(n+1)*(2*n+1)/24)
     if tail.startswith("one"):
-        # sign
         if t_val>=μ:
-            # right side => p=1 - cdf
             p_calc = 1 - stats.norm.cdf((t_val-μ)/σ)
         else:
-            # left => p=cdf
             p_calc = stats.norm.cdf((t_val-μ)/σ)
     else:
         raw = stats.norm.cdf((t_val-μ)/σ)
@@ -999,21 +983,22 @@ def w_apa(t_val: int, n: int, alpha: float, tail: str):
         reason_stats = "because T₍calc₎ did not fall into the rejection region"
         reason_p = "because p ≥ α"
 
-    st.write("### P-value Calculation Explanation")
     normal_cdf_val = stats.norm.cdf((t_val-μ)/σ)
     if tail.startswith("one"):
         if t_val>=μ:
-            st.write(
-                f"Lookup: P(T ≤ {t_val})~{normal_cdf_val:.4f}, but T>mean => p=1−that."
+            expl = (
+                f"Lookup: P(T ≤ {t_val}) ~ {normal_cdf_val:.4f}, T>mean ⇒ p=1−{normal_cdf_val:.4f}."
             )
         else:
-            st.write(
-                f"Lookup: P(T ≤ {t_val})~{normal_cdf_val:.4f}, T<mean => p=that."
+            expl = (
+                f"Lookup: P(T ≤ {t_val}) ~ {normal_cdf_val:.4f}, T<mean ⇒ p={normal_cdf_val:.4f}."
             )
     else:
-        st.write(
-            f"Lookup: P(T ≤ {t_val})~{normal_cdf_val:.4f}. Two‑tailed => p=2×min({normal_cdf_val:.4f},{1-normal_cdf_val:.4f})."
+        expl = (
+            f"Lookup: P(T ≤ {t_val}) ~ {normal_cdf_val:.4f}. "
+            f"Two‑tailed ⇒ p=2×min({normal_cdf_val:.4f},{1-normal_cdf_val:.4f})."
         )
+    st.write(expl)
 
     st.markdown(
         "**APA interpretation**  \n"
@@ -1021,13 +1006,14 @@ def w_apa(t_val: int, n: int, alpha: float, tail: str):
         f"Critical statistic: T₍crit₎={crit}, *p*={alpha:.3f}.  \n"
         f"Statistic comparison → H0 **{decision}** ({reason_stats}).  \n"
         f"*p* comparison → H0 **{decision}** ({reason_p}).  \n"
-        f"**APA 7 report:** *T*={t_val}, *p*={p_calc:.3f} ({tail}). "
+        f"**APA 7 report:** *T*={t_val}, *p*={p_calc:.3f} ({tail}). "
         f"The null hypothesis was **{decision}** at α={alpha:.2f}."
     )
 
 
 def tab_w():
     st.subheader("Tab 6 • Wilcoxon Signed‑Rank T")
+
     c1, c2 = st.columns(2)
     with c1:
         t_val = st.number_input("T statistic", value=15, key="w_val")
@@ -1042,8 +1028,13 @@ def tab_w():
         st.pyplot(plot_w(t_val, n, alpha, tail))
 
     st.write("**T‑table** (single highlight)")
-    w_table(n, alpha, tail)
-    w_apa(t_val, n, alpha, tail)
+    ctable, cexp = st.columns([2,1])
+    with ctable:
+        w_table(n, alpha, tail)
+        show_cumulative_note()
+    with cexp:
+        st.subheader("P‑value Calculation Explanation")
+        w_apa(t_val, n, alpha, tail)
 
 
 ###############################################################################
@@ -1055,20 +1046,21 @@ def critical_binom(n: int, p: float, alpha: float):
     Two‑tailed (k_lo, k_hi).
     """
     cum = 0.0
-    k_lo=0
+    k_lo = 0
     for k in range(n+1):
-        cum += stats.binom.pmf(k,n,p)
-        if cum>=alpha/2:
-            k_lo=k
+        cum += stats.binom.pmf(k, n, p)
+        if cum >= alpha/2:
+            k_lo = k
             break
-    cum =0.0
-    k_hi=n
+    cum = 0.0
+    k_hi = n
     for k in range(n, -1, -1):
-        cum+=stats.binom.pmf(k,n,p)
-        if cum>=alpha/2:
-            k_hi=k
+        cum += stats.binom.pmf(k, n, p)
+        if cum >= alpha/2:
+            k_hi = k
             break
     return k_lo, k_hi
+
 
 def plot_binom(k, n, p):
     xs = np.arange(n+1)
@@ -1083,6 +1075,7 @@ def plot_binom(k, n, p):
     ax.set_title(f"Binomial (n={n}, p={p})")
     fig.tight_layout()
     return fig
+
 
 def build_binom_html(k: int, n: int, p: float) -> str:
     """
@@ -1105,7 +1098,7 @@ def build_binom_html(k: int, n: int, p: float) -> str:
             f'<td id="b_{kv}_2">{cdf_val:.4f}</td>'
             f'<td id="b_{kv}_3">{ccdf_val:.4f}</td>'
         )
-        body+=f"<tr>{row_html}</tr>"
+        body += f"<tr>{row_html}</tr>"
 
     table_code = f"<tr><th>k</th>{head}</tr>{body}"
     html = wrap_table(CSS_BASE, table_code)
@@ -1117,53 +1110,41 @@ def build_binom_html(k: int, n: int, p: float) -> str:
     html = style_cell(html, f"b_{k}_1", color="blue", px=3)
     return html
 
+
 def binom_table(k: int, n: int, p: float):
     code = build_binom_html(k,n,p)
     st.markdown(container(code), unsafe_allow_html=True)
 
-    st.info(
-        "Note: The values in this table are cumulative (the area to the left). "
-        "For one‑tailed binomial tests, you might use the lower or upper tail. "
-        "For two‑tailed, you double the smaller tail area around the observed "
-        "number of successes. The table doesn't change; only how you interpret it."
-    )
 
-def binom_apa(k: int, n: int, p: float, alpha: float):
-    cdf_val = stats.binom.cdf(k,n,p)
-    # if we had a one-tailed approach, we'd see if k≥some boundary or k≤some boundary
-    # user specifically said "two‑tailed"? The instructions mention "One or two"? 
-    # We'll interpret similarly: if "one" => if k≥some boundary => p= ...
-    # but the original code was always two-tailed. We'll keep the new "tail"? 
-    # We'll do a quick approach:
+def binom_apa(k: int, n: int, p: float, alpha: float, tail: str):
+    """
+    Show dynamic explanation and final APA lines for the binomial test.
+    """
+    cdf_val = stats.binom.cdf(k, n, p)
+    pmf_val = stats.binom.pmf(k, n, p)
+    # two-tailed approach or one-tailed approach
+    midpoint = n * p
 
-    # We'll just do: if we have 'one-tailed' and k≥ the mean => p=1-cdf(k-1),
-    # else p=cdf(k). If two-tailed => p=2 * min( cdf_val, 1-cdf_val + pmf ).
-    # We'll do the same style approach as the original. 
-    # For simplicity, let's do what the old code did:
-
-    # two-tailed from original approach:
-    p_2tail = 2*min(cdf_val, 1 - cdf_val + stats.binom.pmf(k,n,p))
-    p_2tail = min(p_2tail,1.0)
-
-    # for "one-tailed", decide if k≥ n*p => "right side" or "left side"
-    # just approximate n*p as the midpoint
-    from math import floor
-    midpoint = n*p
-    if st.session_state.get("b_tail", "two‑tailed")=="one‑tailed":
-        # not standard but let's do sign approach:
-        if k>= midpoint:
-            # right side => p= 1 - cdf(k-1)
-            p_calc = 1 - stats.binom.cdf(k-1,n,p)
+    if tail.startswith("one"):
+        if k >= midpoint:
+            # right side
+            # p = 1 - P(X ≤ k-1)
+            if k>0:
+                p_calc = 1.0 - stats.binom.cdf(k-1, n, p)
+            else:
+                p_calc = 1.0
         else:
-            # left => cdf(k)
-            p_calc = stats.binom.cdf(k,n,p)
+            # left side
+            p_calc = stats.binom.cdf(k, n, p)
     else:
+        # two-tailed
+        p_2tail = 2.0 * min(cdf_val, 1.0 - cdf_val + pmf_val)
+        p_2tail = min(p_2tail, 1.0)
         p_calc = p_2tail
 
-    k_lo, k_hi = critical_binom(n,p,alpha)
-    reject = (k<=k_lo) or (k>=k_hi)
+    k_lo, k_hi = critical_binom(n, p, alpha)
+    reject = (k <= k_lo) or (k >= k_hi)
     decision = "rejected" if reject else "failed to reject"
-
     if reject:
         reason_stats = "because k was within the rejection region"
         reason_p = "because p < α"
@@ -1171,38 +1152,34 @@ def binom_apa(k: int, n: int, p: float, alpha: float):
         reason_stats = "because k was not in the rejection region"
         reason_p = "because p ≥ α"
 
-    # p-value explanation
-    st.write("### P-value Calculation Explanation")
-    # "table" cdf
-    p_x_le_k = stats.binom.cdf(k,n,p)
-    st.write(f"Lookup: P(X ≤ {k}) = {p_x_le_k:.4f}.")
-    # if one-tailed
-    tail = st.session_state.get("b_tail","two‑tailed")
+    # Explanation
+    st.write(f"Lookup: P(X ≤ {k}) = {cdf_val:.4f}.")
+
     if tail.startswith("one"):
-        if k>= midpoint:
+        if k >= midpoint:
             st.write(
-                f"For **one‑tailed** (right side), p = 1 - P(X ≤ {k-1}) ~ 1 - {stats.binom.cdf(k-1,n,p):.4f}."
+                f"For a **one‑tailed** test (right side), p = 1 − P(X ≤ {k-1}) "
+                f"= 1 − {stats.binom.cdf(k-1,n,p):.4f}."
             )
         else:
             st.write(
-                f"For **one‑tailed** (left side), p = P(X ≤ {k}) ~ {p_x_le_k:.4f}."
+                f"For a **one‑tailed** test (left side), p = P(X ≤ {k}) "
+                f"= {cdf_val:.4f}."
             )
     else:
-        pmfK = stats.binom.pmf(k,n,p)
         st.write(
-            f"For **two‑tailed**, p = 2×min({p_x_le_k:.4f}, 1−{p_x_le_k:.4f}+{pmfK:.4f}) "
-            f" = {p_2tail:.4f} (capped at 1.0)."
+            f"For a **two‑tailed** test, p = 2 × min({cdf_val:.4f}, "
+            f"(1−{cdf_val:.4f})+{pmf_val:.4f}) = {p_calc:.4f} (capped at 1)."
         )
 
-    # final APA
     st.markdown(
         "**APA interpretation**  \n"
         f"Calculated statistic: k={k}, *p*={p_calc:.3f}.  \n"
         f"Critical region: k ≤ {k_lo} or k ≥ {k_hi}, *p*={alpha:.3f}.  \n"
         f"Statistic comparison → H₀ **{decision}** ({reason_stats}).  \n"
         f"*p* comparison → H₀ **{decision}** ({reason_p}).  \n"
-        f"**APA 7 report:** Exact binomial test, *p*={p_calc:.3f}. "
-        f"The null hypothesis was **{decision}** at α={alpha:.2f}."
+        f"**APA 7 report:** Exact binomial test, *p*={p_calc:.3f} "
+        f"({tail}). The null hypothesis was **{decision}** at α={alpha:.2f}."
     )
 
 
@@ -1216,18 +1193,21 @@ def tab_binom():
                             step=0.01, min_value=0.01, max_value=0.99, key="b_p")
     with c2:
         k = st.number_input("k (successes)", min_value=0, value=10, step=1, key="b_k")
-        alpha = st.number_input("α (two‑tailed)", value=0.05, step=0.01,
+        alpha = st.number_input("α", value=0.05, step=0.01,
                                 min_value=0.0001, max_value=0.5, key="b_alpha")
-        # add a tail radio but interpret sign? typically binomial is not negative
-        # but user wants one vs two option
         tail = st.radio("Tail", ["one‑tailed", "two‑tailed"], key="b_tail")
 
     if st.button("Update Plot", key="b_plot"):
         st.pyplot(plot_binom(k,n,p))
 
     st.write("**Binomial table** (k±5, single highlight)")
-    binom_table(k,n,p)
-    binom_apa(k,n,p,alpha)
+    ctable, cexp = st.columns([2,1])
+    with ctable:
+        binom_table(k,n,p)
+        show_cumulative_note()
+    with cexp:
+        st.subheader("P‑value Calculation Explanation")
+        binom_apa(k,n,p,alpha,tail)
 
 
 ###############################################################################
@@ -1244,19 +1224,19 @@ def main():
     ])
 
     with tabs[0]:
-        tab_t()            # (new note + p-value explanation + auto shading)
+        tab_t()            # (new features)
     with tabs[1]:
-        tab_z()            # (new note + p-value explanation + auto shading)
+        tab_z()            # (new features)
     with tabs[2]:
-        tab_f()            # (unchanged note/p; always one-tailed)
+        tab_f()            # (no new note/p explanation needed)
     with tabs[3]:
-        tab_chi()          # (unchanged note/p; always one-tailed)
+        tab_chi()          # (no new note/p explanation needed)
     with tabs[4]:
-        tab_u()            # (new note + p-value explanation + auto shading)
+        tab_u()            # (new features)
     with tabs[5]:
-        tab_w()            # (new note + p-value explanation + auto shading)
+        tab_w()            # (new features)
     with tabs[6]:
-        tab_binom()        # (new note + p-value explanation + auto shading)
+        tab_binom()        # (new features)
 
 
 if __name__ == "__main__":
