@@ -82,9 +82,14 @@ def style_cell(html: str, cell_id: str, *, color: str = "red", px: int = 2) -> s
 
 def iframe(html: str, *, height: int = 460) -> None:
     """
-    Render *html* inside a scrollable Streamlit iframe (components.html).
+    Show *html* inline but confine it to `height` pixels with its own
+    scrollbar; this avoids the iframe‑wheel­capture bug.
     """
-    components.html(f"<html><body>{html}</body></html>", height=height, scrolling=True)
+    st.markdown(
+        f'<div style="overflow:auto; max-height:{height}px;">{html}</div>',
+        unsafe_allow_html=True,
+    )
+
 
 
 def next_button(step_key: str) -> None:
