@@ -4,1095 +4,618 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy import stats
 
-# We use a non‑interactive Matplotlib backend
-plt.switch_backend("Agg")
+plt.switch_backend("Agg")                 # always headless
 
 ###############################################################################
-#                           HELPER FUNCTIONS
+#                                GENERIC HELPERS
 ###############################################################################
 
-def place_label(ax, placed_labels, x, y, text, color="blue"):
-    """
-    Places a text label at (x, y), shifting slightly to avoid overlap
-    with previously placed labels.
-    """
+def place_label(ax, placed, x, y, txt, color="blue"):
     dx = dy = 0.0
-    for (xx, yy) in placed_labels:
-        if abs(x - xx) < 0.15 and abs(y - yy) < 0.05:
-            dx += 0.06
-            dy += 0.04
-    final_x = x + dx
-    final_y = y + dy
-    ax.text(final_x, final_y, text, color=color, ha="left", va="bottom", fontsize=8)
-    placed_labels.append((final_x, final_y))
+    for xx, yy in placed:
+        if abs(x - xx) < .15 and abs(y - yy) < .05:
+            dx += .06; dy += .04
+    ax.text(x + dx, y + dy, txt, color=color, ha="left", va="bottom", fontsize=8)
+    placed.append((x + dx, y + dy))
 
-def style_cell(html_str, cell_id, color="red", px=2):
-    """
-    Finds <td id="cell_id"> in html_str and adds an inline style
-    for a colored border.
-    """
-    marker = f'id="{cell_id}"'
-    styled = f'id="{cell_id}" style="border:{px}px solid {color};"'
-    return html_str.replace(marker, styled, 1)
+def style(html: str, cid: str, color: str = "red", px: int = 2) -> str:
+    return html.replace(f'id="{cid}"',
+                        f'id="{cid}" style="border:{px}px solid {color};"', 1)
 
-def show_html_table(html_content, height=450):
-    """
-    Renders the given HTML in a scrollable iframe,
-    so you can see the entire step-by-step table.
-    """
-    wrapped = f"""
-    <html>
-      <head><meta charset="UTF-8"></head>
-      <body>
-        {html_content}
-      </body>
-    </html>
-    """
-    components.html(wrapped, height=height, scrolling=True)
+def show_html(html: str, height: int = 460):
+    components.html(f"<html><body>{html}</body></html>",
+                    height=height, scrolling=True)
 
-def next_step_button(step_key):
-    """
-    A button that increments st.session_state[step_key].
-    """
-    if st.button("Next Step", key=step_key + "_btn"):
-        st.session_state[step_key] += 1
+def next_step(key: str):
+    if st.button("Next Step", key=key+"_btn"):
+        st.session_state[key] += 1
 
-def wrap_html_table(css, table_body):
-    return f"<style>{css}</style><table>{table_body}</table>"
+def wrap(css: str, body: str) -> str:
+    return f"<style>{css}</style><table>{body}</table>"
 
 ###############################################################################
-#                        1) T-DISTRIBUTION TAB
+#                             1 • t‑Distribution
 ###############################################################################
 
-def show_t_tab():
-    st.subheader("Tab 1 • t-Distribution")
-
+def tab_t():
+    st.subheader("Tab 1 • t‑Distribution")
     c1, c2 = st.columns(2)
     with c1:
         t_val = st.number_input("t statistic", value=2.87, key="t_val")
-        df_val = st.number_input("df", value=55, min_value=1, step=1, key="t_df")
+        df    = st.number_input("df", min_value=1, value=55, step=1, key="t_df")
     with c2:
-        alpha = st.number_input("α", value=0.05, step=0.01, min_value=0.0001, max_value=0.5, key="t_alpha")
-        tail_s = st.radio("Tail", ["one-tailed","two-tailed"], key="t_tail")
+        alpha = st.number_input("α", value=0.05, step=0.01,
+                                min_value=0.0001, max_value=0.5, key="t_a")
+        tail  = st.radio("Tail", ["one‑tailed", "two‑tailed"], key="t_tail")
 
-    if st.button("Update Plot (t)", key="t_plot_btn"):
-        fig = plot_t_distribution(t_val, df_val, alpha, tail_s)
-        st.pyplot(fig)
+    if st.button("Update Plot", key="t_plot"):
+        st.pyplot(plot_t(t_val, df, alpha, tail))
 
-    with st.expander("Step-by-step t-table"):
-        show_t_table(df_val, alpha, tail_s, "t_tab")
+    with st.expander("Step‑by‑step t‑table"):
+        t_table(df, alpha, tail, "t")
 
-
-def plot_t_distribution(t_val, df, alpha, tail_s):
+def plot_t(t, df, a, tail):
     fig, ax = plt.subplots(figsize=(12,4), dpi=100)
-    label_positions = []
-    x = np.linspace(-4,4,400)
-    y = stats.t.pdf(x, df)
+    x = np.linspace(-4, 4, 400); y = stats.t.pdf(x, df)
     ax.plot(x, y, 'k')
-    ax.fill_between(x, y, color='lightgrey', alpha=0.2, label="Fail to Reject H₀")
-
-    if tail_s == "one-tailed":
-        t_crit = stats.t.ppf(1 - alpha, df)
-        ax.fill_between(x[x >= t_crit], y[x >= t_crit], color='red', alpha=0.3, label="Reject H₀")
-        ax.axvline(t_crit, color='green', linestyle='--')
-        place_label(ax, label_positions, t_crit, stats.t.pdf(t_crit, df)+0.02, f"t₍crit₎={t_crit:.3f}", "green")
-        reject = (t_val > t_crit)
+    ax.fill_between(x, y, color="lightgrey", alpha=.2,
+                    label="Fail to Reject H₀")
+    labels=[]
+    if tail == "one‑tailed":
+        crit = stats.t.ppf(1-a, df)
+        ax.fill_between(x[x>=crit], y[x>=crit],
+                        color="red", alpha=.3, label="Reject H₀")
+        ax.axvline(crit, color="green", ls="--")
+        place_label(ax, labels, crit, stats.t.pdf(crit, df)+.02,
+                    f"t₍crit₎={crit:.3f}", "green")
+        reject = t > crit
     else:
-        t_crit_r = stats.t.ppf(1 - alpha/2, df)
-        t_crit_l = -t_crit_r
-        ax.fill_between(x[x >= t_crit_r], y[x >= t_crit_r], color='red', alpha=0.3)
-        ax.fill_between(x[x <= t_crit_l], y[x <= t_crit_l], color='red', alpha=0.3, label="Reject H₀")
-        ax.axvline(t_crit_r, color='green', linestyle='--')
-        ax.axvline(t_crit_l, color='green', linestyle='--')
-        place_label(ax, label_positions, t_crit_r, stats.t.pdf(t_crit_r, df)+0.02, f"+t₍crit₎={t_crit_r:.3f}", "green")
-        place_label(ax, label_positions, t_crit_l, stats.t.pdf(t_crit_l, df)+0.02, f"−t₍crit₎={t_crit_r:.3f}", "green")
-        reject = (abs(t_val) > t_crit_r)
+        crit = stats.t.ppf(1-a/2, df)
+        ax.fill_between(x[x>= crit], y[x>= crit], 'red', alpha=.3)
+        ax.fill_between(x[x<=-crit], y[x<=-crit], 'red', alpha=.3,
+                        label="Reject H₀")
+        ax.axvline( crit, color="green", ls="--")
+        ax.axvline(-crit, color="green", ls="--")
+        place_label(ax, labels,  crit, stats.t.pdf( crit, df)+.02,
+                    f"+t₍crit₎={crit:.3f}", "green")
+        place_label(ax, labels, -crit, stats.t.pdf(-crit, df)+.02,
+                    f"–t₍crit₎={crit:.3f}", "green")
+        reject = abs(t) > crit
+    ax.axvline(t, color="blue", ls="--")
+    place_label(ax, labels, t, stats.t.pdf(t, df)+.02,
+                f"t₍calc₎={t:.3f}", "blue")
+    ax.set_title(f"t‑Distribution (df={df}) – "
+                 f"{'Reject' if reject else 'Fail to Reject'} H₀")
+    ax.legend(); fig.tight_layout(); return fig
 
-    ax.axvline(t_val, color='blue', linestyle='--')
-    place_label(ax, label_positions, t_val, stats.t.pdf(t_val, df)+0.02, f"t₍calc₎={t_val:.3f}", "blue")
-    msg = "Reject H₀" if reject else "Fail to Reject H₀"
-    ax.set_title(f"t-Distribution (df={df}) – {msg}")
-    ax.legend()
-    fig.tight_layout()
-    return fig
+def t_table(df, a, tail, key):
+    step=st.session_state.setdefault(key+"_step",-1)
+    dfs=list(range(max(1,df-5), df+6))
+    heads=[("one",.10),("one",.05),("one",.01),("one",.001),
+           ("two",.10),("two",.05),("two",.01),("two",.001)]
+    def tcrit(d,m,al): return stats.t.ppf(1-al/(1 if m=="one" else 2), d)
+    header="".join(f"<th>{m}_{al}</th>" for m,al in heads)
+    body=""
+    for d in dfs:
+        row="".join(f'<td id="df_{d}_{i}">{tcrit(d,m,al):.3f}</td>'
+                    for i,(m,al) in enumerate(heads,1))
+        body+=f'<tr><td id="df_{d}_0">{d}</td>{row}</tr>'
+    css=("table{border-collapse:collapse}"
+         "td,th{border:1px solid#000;width:80px;height:30px;"
+         "text-align:center;font-size:.9rem}")
+    html=wrap(css, f"<tr><th>df</th>{header}</tr>{body}")
 
+    mode="one" if tail.startswith("one") else "two"
+    col_idx=[i for i,(m,al) in enumerate(heads,1)
+             if m==mode and abs(al-a)<1e-9][0]
 
-def show_t_table(df_val, alpha_val, tail_s, key_prefix):
-    """
-    Step-by-step highlight for t-table: row => col => intersection => 
-    if one-tailed=0.05 => highlight two-tailed=0.10
-    """
-    step_key = key_prefix + "_step"
-    if step_key not in st.session_state:
-        st.session_state[step_key] = 0
-    step = st.session_state[step_key]
+    if step>=0:                      # row
+        for i in range(len(heads)+1): html=style(html,f"df_{df}_{i}")
+    if step>=1:                      # column
+        for d in dfs: html=style(html,f"df_{d}_{col_idx}")
+    if step>=2:                      # cell
+        html=style(html,f"df_{df}_{col_idx}","blue",3)
+    if step>=3 and tail=="one‑tailed" and abs(a-.05)<1e-12:
+        alt=heads.index(("two",.10))+1
+        for d in dfs: html=style(html,f"df_{d}_{alt}")
+        html=style(html,f"df_{df}_{alt}","blue",3)
 
-    df_min = max(1, df_val-5)
-    df_max = df_val+5
-    df_range = list(range(df_min, df_max+1))
-
-    # columns: (mode, alpha)
-    columns = [
-        ("one", 0.10), ("one", 0.05), ("one", 0.01), ("one", 0.001),
-        ("two", 0.10), ("two", 0.05), ("two", 0.01), ("two", 0.001),
-    ]
-
-    def t_crit(d, mode, a_):
-        if mode == "one":
-            return stats.t.ppf(1 - a_, d)
-        else:
-            return stats.t.ppf(1 - a_/2, d)
-
-    # Build the HTML table
-    header_html = "".join(f"<th>{m}_{a}</th>" for (m,a) in columns)
-    table_body = "<tr><th>df</th>" + header_html + "</tr>\n"
-
-    for d in df_range:
-        row_html = f'<tr><td id="t_{d}_0">{d}</td>'
-        for i,(m,a) in enumerate(columns, start=1):
-            cell_id = f"t_{d}_{i}"
-            val = t_crit(d, m, a)
-            row_html += f'<td id="{cell_id}">{val:.3f}</td>'
-        row_html += "</tr>\n"
-        table_body += row_html
-
-    css = """
-    table {
-      border-collapse: collapse;
-      margin-top: 10px;
-    }
-    table td, table th {
-      border:1px solid #000;
-      width:80px;
-      height:30px;
-      text-align:center;
-      font-size:0.9rem;
-    }
-    table th {
-      background-color: #f0f0f0;
-    }
-    """
-    table_html = wrap_html_table(css, table_body)
-
-    # figure out which column matches tail_s, alpha_val
-    mode_ = "one" if tail_s.startswith("one") else "two"
-    col_index = None
-    for i,(m,a) in enumerate(columns, start=1):
-        if m==mode_ and abs(a - alpha_val)<1e-12:
-            col_index = i
-            break
-
-    row_in = (df_val in df_range)
-
-    # steps:
-    # 0 => highlight entire row
-    # 1 => highlight entire col
-    # 2 => highlight intersection
-    # 3 => if one-tailed alpha=0.05 => highlight the two_0.10 column as well
-    if step >= 0 and row_in:
-        for cc in range(len(columns)+1):
-            table_html = style_cell(table_html, f"t_{df_val}_{cc}")
-    if step >= 1 and col_index is not None:
-        for d_ in df_range:
-            table_html = style_cell(table_html, f"t_{d_}_{col_index}")
-    if step >= 2 and row_in and col_index is not None:
-        table_html = style_cell(table_html, f"t_{df_val}_{col_index}", "blue", 3)
-    if step >= 3 and tail_s=="one-tailed" and abs(alpha_val-0.05)<1e-12:
-        # highlight the two_0.10 column
-        alt_index = None
-        for i,(mm,aa) in enumerate(columns, start=1):
-            if mm=="two" and abs(aa-0.10)<1e-12:
-                alt_index=i
-                break
-        if alt_index is not None and row_in:
-            for d_ in df_range:
-                table_html = style_cell(table_html, f"t_{d_}_{alt_index}")
-            table_html = style_cell(table_html, f"t_{df_val}_{alt_index}", "blue", 3)
-
-    show_html_table(table_html, height=450)
-
-    steps_list = [
-        "Highlight df row",
-        "Highlight α/tail column",
-        "Intersection => t₍crit₎",
-        "For one-tailed α=0.05, also highlight two-tailed α=0.10"
-    ]
-    if not (tail_s=="one-tailed" and abs(alpha_val-0.05)<1e-12):
-        steps_list.pop()  # remove the 4th step if not relevant
-
-    if step >= len(steps_list):
-        st.write("All steps complete!")
-    else:
-        st.write(f"Step {step+1}: {steps_list[step]}")
-
-    if st.button("Next Step", key=key_prefix+"_table_btn"):
-        st.session_state[step_key] += 1
-
+    show_html(html)
+    steps=["Highlight df row","Highlight α/tail column","Intersection → t₍crit₎"]
+    if tail=="one‑tailed" and abs(a-.05)<1e-12:
+        steps.append("Also two‑tailed α = 0.10 equivalence")
+    if step<0: st.write("Click **Next Step** to begin.")
+    elif step>=len(steps): st.write("All steps complete!")
+    else: st.write(f"**Step {step+1}**: {steps[step]}")
+    next_step(key+"_step")
 
 ###############################################################################
-#                      2) Z-DISTRIBUTION TAB
+#                             2 • z‑Distribution
 ###############################################################################
 
-def show_z_tab():
-    st.subheader("Tab 2 • z-Distribution")
-
-    c1,c2 = st.columns(2)
+def tab_z():
+    st.subheader("Tab 2 • z‑Distribution")
+    c1,c2=st.columns(2)
     with c1:
-        z_val= st.number_input("z statistic", value=1.64, key="z_val")
+        z_val=st.number_input("z statistic", value=1.64, key="z_val")
     with c2:
-        alpha= st.number_input("α", value=0.05, step=0.01, min_value=0.0001, max_value=0.5, key="z_alpha")
-        tail_s= st.radio("Tail", ["one-tailed","two-tailed"], key="z_tail")
+        alpha=st.number_input("α", value=0.05, step=0.01,
+                              min_value=0.0001,max_value=0.5, key="z_a")
+        tail =st.radio("Tail",["one‑tailed","two‑tailed"], key="z_tail")
+    if st.button("Update Plot", key="z_plot"):
+        st.pyplot(plot_z(z_val,alpha,tail))
+    with st.expander("Step‑by‑step z‑table"):
+        z_table(z_val,"z")
 
-    if st.button("Update Plot (z)", key="z_plot_btn"):
-        fig= plot_z_distribution(z_val, alpha, tail_s)
-        st.pyplot(fig)
-
-    with st.expander("Step-by-step z-table"):
-        show_z_table(z_val, "z_tab")
-
-
-def plot_z_distribution(z_val, alpha, tail_s):
-    fig, ax = plt.subplots(figsize=(12,4), dpi=100)
-    label_positions=[]
-    x= np.linspace(-4,4,400)
-    y= stats.norm.pdf(x)
+def plot_z(z,a,tail):
+    fig,ax=plt.subplots(figsize=(12,4),dpi=100)
+    x=np.linspace(-4,4,400); y=stats.norm.pdf(x)
     ax.plot(x,y,'k')
-    ax.fill_between(x,y,color='lightgrey', alpha=0.2, label="Fail to Reject H₀")
-
-    if tail_s=="one-tailed":
-        z_crit= stats.norm.ppf(1-alpha)
-        ax.fill_between(x[x>=z_crit], y[x>=z_crit], color='red', alpha=0.3, label="Reject H₀")
-        ax.axvline(z_crit, color='green', linestyle='--')
-        place_label(ax, label_positions, z_crit, stats.norm.pdf(z_crit)+0.02, f"z₍crit₎={z_crit:.3f}", 'green')
-        reject = (z_val > z_crit)
-        final_crit= z_crit
+    ax.fill_between(x,y,color="lightgrey",alpha=.2,
+                    label="Fail to Reject H₀")
+    labels=[]
+    if tail=="one‑tailed":
+        crit=stats.norm.ppf(1-a)
+        ax.fill_between(x[x>=crit],y[x>=crit],'red',alpha=.3,label="Reject H₀")
+        ax.axvline(crit,'g','--')
+        place_label(ax,labels,crit,stats.norm.pdf(crit)+.02,
+                    f"z₍crit₎={crit:.3f}","green")
+        reject=z>crit
     else:
-        z_crit_r= stats.norm.ppf(1- alpha/2)
-        z_crit_l= -z_crit_r
-        ax.fill_between(x[x>= z_crit_r], y[x>= z_crit_r], color='red', alpha=0.3)
-        ax.fill_between(x[x<= z_crit_l], y[x<= z_crit_l], color='red', alpha=0.3, label="Reject H₀")
-        ax.axvline(z_crit_r, color='green', linestyle='--')
-        ax.axvline(z_crit_l, color='green', linestyle='--')
-        place_label(ax, label_positions, z_crit_r, stats.norm.pdf(z_crit_r)+0.02, f"+z₍crit₎={z_crit_r:.3f}", 'green')
-        place_label(ax, label_positions, z_crit_l, stats.norm.pdf(z_crit_l)+0.02, f"−z₍crit₎={z_crit_r:.3f}", 'green')
-        reject = (abs(z_val) > z_crit_r)
-        final_crit= z_crit_r
-
-    ax.axvline(z_val, color='blue', linestyle='--')
-    place_label(ax, label_positions, z_val, stats.norm.pdf(z_val)+0.02, f"z₍calc₎={z_val:.3f}", 'blue')
-
-    msg = "Reject H₀" if reject else "Fail to Reject H₀"
-    ax.set_title(f"z-Distribution – {msg}")
-    ax.legend()
-    fig.tight_layout()
-    return fig
-
-
-def show_z_table(z_in, key_prefix):
-    step_key = key_prefix + "_step"
-    if step_key not in st.session_state:
-        st.session_state[step_key] = 0
-    step = st.session_state[step_key]
-
-    z_in = max(0, min(3.49, z_in))
-    row_base = round(np.floor(z_in*10)/10,1)
-    col_part = round(z_in - row_base,2)
-
-    row_vals = np.round(np.arange(0,3.5,0.1),1)
-    col_vals = np.round(np.arange(0,0.1,0.01),2)
-
-    if row_base not in row_vals:
-        row_base= min(row_vals, key=lambda r:abs(r-row_base))
-    if col_part not in col_vals:
-        col_part= min(col_vals, key=lambda c:abs(c-col_part))
-
-    # build table
-    header = "".join(f"<th>{cv:.2f}</th>" for cv in col_vals)
-    table_body = f"<tr><th>z.x</th>{header}</tr>\n"
-
-    idx_r = np.where(row_vals==row_base)[0]
-    if len(idx_r)==0:
-        idx_r=[0]
-    idx_r=idx_r[0]
-    row_start=max(0, idx_r-10)
-    row_end=min(len(row_vals)-1, idx_r+10)
-    sub_rows=row_vals[row_start: row_end+1]
-
-    for rv in sub_rows:
-        row_html = f'<tr><td id="z_{rv:.1f}_0">{rv:.1f}</td>'
-        for cv in col_vals:
-            cell_id=f"z_{rv:.1f}_{cv:.2f}"
-            zv= rv+cv
-            cdf_val= stats.norm.cdf(zv)
-            row_html+= f'<td id="{cell_id}">{cdf_val:.4f}</td>'
-        row_html+="</tr>\n"
-        table_body+= row_html
-
-    css= """
-    table {
-      border-collapse: collapse;
-      margin-top: 10px;
-    }
-    table td, table th {
-      border:1px solid #000;
-      width:70px; height:30px;
-      text-align:center; font-size:0.9rem;
-    }
-    table th {
-      background-color: #f0f0f0;
-    }
-    """
-    html_out= wrap_html_table(css, table_body)
-
-    row_in= (row_base in sub_rows)
-    col_in= (col_part in col_vals)
-
-    if step>=0 and row_in:
-        for cv in col_vals:
-            html_out= style_cell(html_out, f"z_{row_base:.1f}_{cv:.2f}")
-        html_out= style_cell(html_out, f"z_{row_base:.1f}_0")
-
-    if step>=1 and col_in:
-        for rv in sub_rows:
-            html_out= style_cell(html_out, f"z_{rv:.1f}_{col_part:.2f}")
-
-    if step>=2 and row_in and col_in:
-        html_out= style_cell(html_out, f"z_{row_base:.1f}_{col_part:.2f}", "blue",3)
-
-    show_html_table(html_out, height=450)
-
-    steps_text= [
-        f"1) Highlight row {row_base:.1f}",
-        f"2) Highlight column {col_part:.2f}",
-        "3) Intersection => Φ(z)"
-    ]
-    if step>= len(steps_text):
-        st.write("All steps complete!")
-    else:
-        st.write(steps_text[step])
-
-    if st.button("Next Step", key=key_prefix+"_table_btn"):
-        st.session_state[step_key]+=1
-
-###############################################################################
-#                        3) F-DISTRIBUTION TAB
-###############################################################################
-
-def show_f_tab():
-    st.subheader("Tab 3 • F-Distribution")
-
-    c1,c2 = st.columns(2)
-    with c1:
-        f_val = st.number_input("F statistic", value=4.32, key="f_val")
-        df1   = st.number_input("df1 (numerator)", value=5, min_value=1, key="f_df1")
-    with c2:
-        df2   = st.number_input("df2 (denominator)", value=20, min_value=1, key="f_df2")
-        alpha = st.number_input("α (F)", value=0.05, step=0.01, min_value=0.0001, max_value=0.5, key="f_alpha")
-
-    if st.button("Update Plot (F)", key="f_plot_btn"):
-        fig= plot_f_distribution(f_val, df1, df2, alpha)
-        st.pyplot(fig)
-
-    with st.expander("Step-by-step F-table"):
-        show_f_table(df1, df2, alpha, "f_tab")
-
-
-def plot_f_distribution(f_val, df1, df2, alpha):
-    fig, ax = plt.subplots(figsize=(12,4), dpi=100)
-    label_positions=[]
-    # we set an upper x-limit to something like ppf(.995) * 1.1 so the distribution is visible
-    x_max= stats.f.ppf(0.995, df1, df2)*1.2
-    x= np.linspace(0, x_max, 400)
-    y= stats.f.pdf(x, df1, df2)
-    ax.plot(x,y,'k')
-    ax.fill_between(x,y,color='lightgrey', alpha=0.2, label="Fail to Reject H₀")
-
-    f_crit= stats.f.ppf(1-alpha, df1, df2)
-    ax.fill_between(x[x>= f_crit], y[x>= f_crit], color='red', alpha=0.3, label="Reject H₀")
-    ax.axvline(f_crit, color='green', ls='--')
-    place_label(ax, label_positions, f_crit, stats.f.pdf(f_crit, df1, df2)+0.02, f"F₍crit₎={f_crit:.3f}", 'green')
-
-    ax.axvline(f_val, color='blue', ls='--')
-    place_label(ax, label_positions, f_val, stats.f.pdf(f_val, df1, df2)+0.02, f"F₍calc₎={f_val:.3f}", 'blue')
-
-    reject= (f_val> f_crit)
-    msg= "Reject H₀" if reject else "Fail to Reject H₀"
-    ax.set_title(f"F-Distribution (df1={df1}, df2={df2}) – {msg}")
-    ax.legend()
-    fig.tight_layout()
-    return fig
-
-
-def show_f_table(df1, df2, alpha, key_prefix):
-    step_key= key_prefix+"_step"
-    if step_key not in st.session_state:
-        st.session_state[step_key]=0
-    step= st.session_state[step_key]
-
-    df1_min= max(1, df1-5)
-    df1_max= df1+5
-    df2_min= max(1, df2-5)
-    df2_max= df2+5
-    df1_list= list(range(df1_min, df1_max+1))
-    df2_list= list(range(df2_min, df2_max+1))
-
-    def f_crit(d1, d2, a_):
-        return stats.f.ppf(1 - a_, d1, d2)
-
-    header_html= "".join(f"<th>{col}</th>" for col in df2_list)
-    table_body= f"<tr><th>df1\\df2</th>{header_html}</tr>\n"
-
-    for r in df1_list:
-        row_html= f'<tr><td id="f_{r}_0">{r}</td>'
-        for idx,col in enumerate(df2_list, start=1):
-            cell_id= f"f_{r}_{idx}"
-            val= f_crit(r,col,alpha)
-            row_html+= f'<td id="{cell_id}">{val:.3f}</td>'
-        row_html+= "</tr>\n"
-        table_body+= row_html
-
-    css= """
-    table {
-      border-collapse: collapse;
-      margin-top:10px;
-    }
-    table td, table th {
-      border:1px solid #000;
-      width:70px; height:30px;
-      text-align:center;
-      font-size:0.8rem;
-    }
-    table th {
-      background-color:#f0f0f0;
-    }
-    """
-    table_html= wrap_html_table(css, table_body)
-
-    row_in= (df1 in df1_list)
-    col_in= (df2 in df2_list)
-    col_idx= None
-    if col_in:
-        col_idx= df2_list.index(df2)+1
-
-    if step>=0 and row_in:
-        for cc in range(len(df2_list)+1):
-            table_html= style_cell(table_html, f"f_{df1}_{cc}")
-    if step>=1 and col_in:
-        for rr in df1_list:
-            table_html= style_cell(table_html, f"f_{rr}_{col_idx}")
-    if step>=2 and row_in and col_in:
-        table_html= style_cell(table_html, f"f_{df1}_{col_idx}", "blue", 3)
-
-    show_html_table(table_html)
-
-    steps_text= [
-        f"1) Highlight row df1={df1}",
-        f"2) Highlight column df2={df2}",
-        "3) Intersection => F₍crit₎"
-    ]
-    if step>= len(steps_text):
-        st.write("All steps complete!")
-    else:
-        st.write(steps_text[step])
-
-    if st.button("Next Step", key=key_prefix+"_table_btn"):
-        st.session_state[step_key]+=1
-
-###############################################################################
-#                     4) CHI-SQUARE TAB
-###############################################################################
-
-def show_chi_tab():
-    st.subheader("Tab 4 • Chi-Square (χ²)")
-
-    c1,c2= st.columns(2)
-    with c1:
-        chi_val= st.number_input("χ² statistic", value=7.88, key="c_val")
-        df_val= st.number_input("df (Chi)", value=3, min_value=1, step=1, key="c_df")
-    with c2:
-        alpha= st.selectbox("α", [0.10,0.05,0.01,0.001], index=1, key="c_alpha")
-
-    if st.button("Update Plot (χ²)", key="chi_plot_btn"):
-        fig= plot_chi_square(chi_val, df_val, alpha)
-        st.pyplot(fig)
-
-    with st.expander("Step-by-step χ²-table"):
-        show_chi_table(df_val, alpha, "chi_tab")
-
-
-def chi_crit(df, a):
-    return stats.chi2.ppf(1-a, df)
-
-def plot_chi_square(chi_val, df, alpha):
-    fig, ax= plt.subplots(figsize=(12,4), dpi=100)
-    label_positions=[]
-    x_max= chi_crit(df, 0.001)*1.2
-    x= np.linspace(0, x_max, 400)
-    y= stats.chi2.pdf(x, df)
-    ax.plot(x,y,'k')
-    ax.fill_between(x,y,color='lightgrey', alpha=0.2, label="Fail to Reject H₀")
-
-    cc= chi_crit(df, alpha)
-    ax.fill_between(x[x>=cc], y[x>=cc], color='red', alpha=0.3, label="Reject H₀")
-    ax.axvline(cc, color='green', linestyle='--')
-    place_label(ax, label_positions, cc, stats.chi2.pdf(cc,df)+0.02, f"χ²₍crit₎={cc:.3f}", 'green')
-
-    ax.axvline(chi_val, color='blue', linestyle='--')
-    place_label(ax, label_positions, chi_val, stats.chi2.pdf(chi_val,df)+0.02, f"χ²₍calc₎={chi_val:.3f}", 'blue')
-
-    reject= (chi_val>cc)
-    msg= "Reject H₀" if reject else "Fail to Reject H₀"
-    ax.set_title(f"χ²-Distribution (df={df}) – {msg}")
-    ax.legend()
-    fig.tight_layout()
-    return fig
-
-def show_chi_table(df_val, alpha, key_prefix):
-    step_key= key_prefix+"_step"
-    if step_key not in st.session_state:
-        st.session_state[step_key]=0
-    step= st.session_state[step_key]
-
-    df_min= max(1, df_val-5)
-    df_max= df_val+5
-    df_range= list(range(df_min, df_max+1))
-    alpha_list= [0.10, 0.05, 0.01, 0.001]
-
-    def chi_crit_func(d, a_):
-        return stats.chi2.ppf(1-a_, d)
-
-    header= "".join(f"<th>α={a_}</th>" for a_ in alpha_list)
-    table_body= f"<tr><th>df</th>{header}</tr>\n"
-    for d_ in df_range:
-        row_html= f'<tr><td id="chi_{d_}_0">{d_}</td>'
-        for idx,a_ in enumerate(alpha_list, start=1):
-            cid= f"chi_{d_}_{idx}"
-            val= chi_crit_func(d_, a_)
-            row_html+= f'<td id="{cid}">{val:.3f}</td>'
-        row_html+="</tr>\n"
-        table_body+= row_html
-
-    css= """
-    table {
-      border-collapse: collapse;
-      margin-top:10px;
-    }
-    table td, table th {
-      border:1px solid #000;
-      width:80px; height:30px;
-      text-align:center; font-size:0.85rem;
-    }
-    table th {
-      background-color:#f0f0f0;
-    }
-    """
-    html_out= wrap_html_table(css, table_body)
-
-    row_in= (df_val in df_range)
-    try:
-        col_idx= alpha_list.index(alpha)+1
-        col_in= True
-    except:
-        col_idx=None
-        col_in=False
-
-    if step>=0 and row_in:
-        for cc in range(len(alpha_list)+1):
-            html_out= style_cell(html_out, f"chi_{df_val}_{cc}")
-    if step>=1 and col_in:
-        for d_ in df_range:
-            html_out= style_cell(html_out, f"chi_{d_}_{col_idx}")
-    if step>=2 and row_in and col_in:
-        html_out= style_cell(html_out, f"chi_{df_val}_{col_idx}", "blue", 3)
-
-    show_html_table(html_out)
-
-    steps_txt= [
-        f"1) Highlight row df={df_val}",
-        f"2) Highlight column α={alpha}",
-        "3) Intersection => χ²₍crit₎"
-    ]
-    if step>= len(steps_txt):
-        st.write("All steps complete!")
-    else:
-        st.write(steps_txt[step])
-
-    if st.button("Next Step", key=key_prefix+"_table_btn"):
-        st.session_state[step_key]+=1
-
-
-###############################################################################
-#                  5) MANN–WHITNEY U TAB
-###############################################################################
-
-def show_mannwhitney_tab():
-    st.subheader("Tab 5 • Mann–Whitney U")
-
-    c1,c2= st.columns(2)
-    with c1:
-        u_val= st.number_input("U statistic", value=23, min_value=1, key="u_val")
-        n1= st.number_input("n1", value=10, min_value=2, step=1, key="u_n1")
-    with c2:
-        n2= st.number_input("n2", value=12, min_value=2, step=1, key="u_n2")
-        alpha= st.number_input("α (Mann–Whitney)", value=0.05, step=0.01,
-                               min_value=0.0001, max_value=0.5, key="u_alpha")
-        tail_s= st.radio("Tail (U)", ["one-tailed","two-tailed"], key="u_tail")
-
-    if st.button("Update Plot (U)", key="u_plot_btn"):
-        fig= plot_mannwhitney(u_val, n1, n2, alpha, tail_s)
-        st.pyplot(fig)
-
-    with st.expander("Step-by-step U-table"):
-        show_mannwhitney_table(n1, n2, alpha, tail_s, "u_tab")
-
-
-def mw_u_crit(n1, n2, alpha, tail_s):
-    """
-    Minimal dummy formula. Typically you'd use tables or normal approx.
-    We'll do a normal approximation approach here for demonstration.
-    """
-    mu= n1*n2/2.0
-    sigma= np.sqrt(n1*n2*(n1+n2+1)/12.0)
-    if tail_s=="one-tailed":
-        z= stats.norm.ppf(alpha)
-        return int(np.floor(mu+z*sigma))
-    else:
-        z= stats.norm.ppf(alpha/2)
-        lower= int(np.floor(mu+ z*sigma))
-        upper= int(np.ceil(mu - z*sigma))
-        return (lower, upper)
-
-def plot_mannwhitney(u_val, n1, n2, alpha, tail_s):
-    mu= n1*n2/2
-    sigma= np.sqrt(n1*n2*(n1+n2+1)/12)
-    fig, ax= plt.subplots(figsize=(12,4), dpi=100)
-    label_positions=[]
-
-    x_min= mu-4*sigma
-    x_max= mu+4*sigma
-    x= np.linspace(x_min, x_max, 400)
-    y= stats.norm.pdf(x, mu, sigma)
-    ax.plot(x,y,'k')
-    ax.fill_between(x,y,color='lightgrey', alpha=0.2, label="Fail to Reject H₀")
-
-    if tail_s=="one-tailed":
-        crit= mw_u_crit(n1, n2, alpha, "one-tailed")  # single integer
-        ax.fill_between(x[x<=crit], y[x<=crit], color='red', alpha=0.3, label="Reject H₀")
-        ax.axvline(crit, color='green', linestyle='--')
-        place_label(ax, label_positions, crit, stats.norm.pdf(crit, mu, sigma)+0.02,
-                    f"U₍crit₎={crit}", 'green')
-        reject= (u_val<= crit)
-    else:
-        lohi= mw_u_crit(n1, n2, alpha, "two-tailed")  # (low, high)
-        lo, hi= lohi
-        ax.fill_between(x[x<=lo], y[x<=lo], color='red', alpha=0.3)
-        ax.fill_between(x[x>=hi], y[x>=hi], color='red', alpha=0.3, label="Reject H₀")
-        ax.axvline(lo, color='green', linestyle='--')
-        ax.axvline(hi, color='green', linestyle='--')
-        place_label(ax, label_positions, lo, stats.norm.pdf(lo, mu, sigma)+0.02,
-                    f"U₍crit₎={lo}", 'green')
-        reject= (u_val<= lo or u_val>= hi)
-    ax.axvline(u_val, color='blue', linestyle='--')
-    place_label(ax, label_positions, u_val, stats.norm.pdf(u_val,mu,sigma)+0.02,
-                f"U₍calc₎={u_val}", 'blue')
-
-    msg= "Reject H₀" if reject else "Fail to Reject H₀"
-    ax.set_title(f"Mann–Whitney U: n1={n1}, n2={n2} – {msg}")
-    ax.legend()
-    fig.tight_layout()
-    return fig
-
-def show_mannwhitney_table(n1, n2, alpha, tail_s, key_prefix):
-    """
-    Step-by-step approach with row => n1±5, col => n2±5, intersection => U_crit.
-    """
-    step_key= key_prefix+"_step"
-    if step_key not in st.session_state:
-        st.session_state[step_key]=0
-    step= st.session_state[step_key]
-
-    n1_min= max(2, n1-5)
-    n1_max= n1+5
-    n1_list= list(range(n1_min, n1_max+1))
-
-    n2_min= max(2, n2-5)
-    n2_max= n2+5
-    n2_list= list(range(n2_min, n2_max+1))
-
-    def make_cell(r,c):
-        val= mw_u_crit(r, c, alpha, tail_s)
-        # for two-tailed, val is (lo,hi)
-        if isinstance(val, tuple):
-            return f"{val[0]},{val[1]}"
-        return str(val)
-
-    header= "".join(f"<th>{col}</th>" for col in n2_list)
-    table_body= f"<tr><th>n1\\n2</th>{header}</tr>\n"
-
-    for row_n1 in n1_list:
-        row_html= f'<tr><td id="mw_{row_n1}_0">{row_n1}</td>'
-        for idx, col_n2 in enumerate(n2_list, start=1):
-            cid= f"mw_{row_n1}_{idx}"
-            cell_val= make_cell(row_n1, col_n2)
-            row_html+= f'<td id="{cid}">{cell_val}</td>'
-        row_html+="</tr>\n"
-        table_body+= row_html
-
-    css= """
-    table {
-      border-collapse: collapse;
-      margin-top:10px;
-    }
-    table td, table th {
-      border:1px solid #000;
-      width:80px; height:30px;
-      text-align:center; font-size:0.85rem;
-    }
-    table th {
-      background-color:#f0f0f0;
-    }
-    """
-    html_out= wrap_html_table(css, table_body)
-
-    # find col index
-    col_in= (n2 in n2_list)
-    if col_in:
-        col_idx= n2_list.index(n2)+1
-    else:
-        col_idx= None
-
-    row_in= (n1 in n1_list)
-
-    # steps
-    # 0 => highlight entire row n1
-    # 1 => highlight entire column n2
-    # 2 => highlight intersection => U_crit
-    if step>=0 and row_in:
-        for i in range(len(n2_list)+1):
-            html_out= style_cell(html_out, f"mw_{n1}_{i}")
-    if step>=1 and col_in:
-        for r_ in n1_list:
-            html_out= style_cell(html_out, f"mw_{r_}_{col_idx}")
-    if step>=2 and row_in and col_in:
-        html_out= style_cell(html_out, f"mw_{n1}_{col_idx}", "blue", 3)
-
-    show_html_table(html_out)
-
-    steps_text= [
-        f"1) Highlight row n1={n1}",
-        f"2) Highlight column n2={n2}",
-        "3) Intersection => U₍crit₎"
-    ]
-    if step>= len(steps_text):
-        st.write("All steps complete!")
-    else:
-        st.write(steps_text[step])
-
-    if st.button("Next Step", key=key_prefix+"_table_btn"):
-        st.session_state[step_key]+=1
-
-
-###############################################################################
-#                6) WILCOXON SIGNED-RANK TAB
-###############################################################################
-
-def show_wilcoxon_tab():
-    st.subheader("Tab 6 • Wilcoxon Signed-Rank T")
-
-    c1,c2= st.columns(2)
-    with c1:
-        T_val= st.number_input("T statistic", value=15, min_value=1, key="wil_T")
-        N_val= st.number_input("N (non-zero diffs)", value=12, min_value=5, step=1, key="wil_N")
-    with c2:
-        alpha= st.number_input("α (Wilcoxon)", value=0.05, step=0.01, min_value=0.0001, max_value=0.5, key="wil_alpha")
-        tail_s= st.radio("Tail (Wilcoxon)", ["one-tailed","two-tailed"], key="wil_tail")
-
-    if st.button("Update Plot (Wilcoxon)", key="wil_plot_btn"):
-        fig= plot_wilcoxon(T_val, N_val, alpha, tail_s)
-        st.pyplot(fig)
-
-    with st.expander("Step-by-step Wilcoxon T-table"):
-        show_wilcoxon_table(N_val, alpha, tail_s, "wil_tab")
-
-
-def wlx_t_crit(N, alpha, tail):
-    """
-    Minimal approach for demonstration. 
-    Use normal approx: mu= N(N+1)/4, sigma= sqrt(N(N+1)(2N+1)/24), etc.
-    We'll produce a single or pair of boundary values.
-    """
-    mu= N*(N+1)/4
-    sigma= np.sqrt(N*(N+1)*(2*N+1)/24)
-    if tail=="one-tailed":
-        z= stats.norm.ppf(alpha)
-        return int(np.floor(mu+ z*sigma))
-    else:
-        z= stats.norm.ppf(alpha/2)
-        lo= int(np.floor(mu+ z*sigma))
-        hi= int(np.ceil(mu- z*sigma))
-        return (lo, hi)
-
-def plot_wilcoxon(T_val, N_val, alpha, tail_s):
-    mu= N_val*(N_val+1)/4
-    sigma= np.sqrt(N_val*(N_val+1)*(2*N_val+1)/24)
-    fig, ax= plt.subplots(figsize=(12,4), dpi=100)
-    label_positions=[]
-    x_min= mu - 4*sigma
-    x_max= mu + 4*sigma
-    x= np.linspace(x_min, x_max, 400)
-    y= stats.norm.pdf(x, mu, sigma)
-    ax.plot(x,y,'k')
-    ax.fill_between(x,y,color='lightgrey', alpha=0.2, label="Fail to Reject H₀")
-
-    if tail_s=="one-tailed":
-        crit= wlx_t_crit(N_val, alpha, "one-tailed")
-        ax.fill_between(x[x<=crit], y[x<=crit], color='red', alpha=0.3, label="Reject H₀")
-        ax.axvline(crit, color='green', linestyle='--')
-        place_label(ax, label_positions, crit, stats.norm.pdf(crit, mu, sigma)+0.02,
-                    f"T₍crit₎={crit}", 'green')
-        reject= (T_val<= crit)
-    else:
-        lohi= wlx_t_crit(N_val, alpha, "two-tailed")
-        lo, hi= lohi
-        ax.fill_between(x[x<=lo], y[x<=lo], color='red', alpha=0.3)
-        ax.fill_between(x[x>=hi], y[x>=hi], color='red', alpha=0.3, label="Reject H₀")
-        ax.axvline(lo, color='green', linestyle='--')
-        ax.axvline(hi, color='green', linestyle='--')
-        place_label(ax, label_positions, lo, stats.norm.pdf(lo, mu, sigma)+0.02, f"T₍crit₎={lo}", 'green')
-        reject= (T_val<= lo or T_val>= hi)
-
-    ax.axvline(T_val, color='blue', linestyle='--')
-    place_label(ax, label_positions, T_val, stats.norm.pdf(T_val, mu, sigma)+0.02,
-                f"T₍calc₎={T_val}", 'blue')
-
-    msg= "Reject H₀" if reject else "Fail to Reject H₀"
-    ax.set_title(f"Wilcoxon T (N={N_val}) – {msg}")
-    ax.legend()
-    fig.tight_layout()
-    return fig
-
-def show_wilcoxon_table(N_val, alpha, tail_s, key_prefix):
-    """
-    Step-by-step approach: row => N±5, col => alpha in [0.10, 0.05, 0.01, 0.001],
-    intersection => T₍crit₎.
-    """
-    step_key= key_prefix + "_step"
-    if step_key not in st.session_state:
-        st.session_state[step_key]=0
-    step= st.session_state[step_key]
-
-    N_min= max(5, N_val-5)
-    N_max= N_val+5
-    N_list= range(N_min, N_max+1)
-    alpha_list= [0.10, 0.05, 0.01, 0.001]
-
-    def wlx_crit_func(nn, a_, tail_):
-        return wlx_t_crit(nn, a_, tail_)
-
-    # Build table
-    header= "".join(f"<th>α={a_}</th>" for a_ in alpha_list)
-    table_body= f"<tr><th>N</th>{header}</tr>\n"
-    for nn in N_list:
-        row_html= f'<tr><td id="wil_{nn}_0">{nn}</td>'
-        for idx,a_ in enumerate(alpha_list, start=1):
-            cell_id= f"wil_{nn}_{idx}"
-            val= wlx_crit_func(nn, a_, tail_s)
-            if isinstance(val, tuple):
-                # two values
-                row_html+= f'<td id="{cell_id}">{val[0]},{val[1]}</td>'
-            else:
-                row_html+= f'<td id="{cell_id}">{val}</td>'
-        row_html+= "</tr>\n"
-        table_body+= row_html
-
-    css= """
-    table {
-      border-collapse: collapse;
-      margin-top:10px;
-    }
-    table td, table th {
-      border:1px solid #000;
-      width:90px; height:30px;
-      text-align:center;
-      font-size:0.85rem;
-    }
-    table th {
-      background-color:#f0f0f0;
-    }
-    """
-    html_out= wrap_html_table(css, table_body)
-
-    row_in= (N_val in N_list)
-    try:
-        col_idx= alpha_list.index(alpha)+1
-        col_in=True
-    except:
-        col_idx=None
-        col_in=False
-
-    if step>=0 and row_in:
-        for cc in range(len(alpha_list)+1):
-            html_out= style_cell(html_out, f"wil_{N_val}_{cc}")
-    if step>=1 and col_in:
-        for nn_ in N_list:
-            html_out= style_cell(html_out, f"wil_{nn_}_{col_idx}")
-    if step>=2 and row_in and col_in:
-        html_out= style_cell(html_out, f"wil_{N_val}_{col_idx}", "blue",3)
-
-    show_html_table(html_out)
-
-    steps_text= [
-        f"1) Highlight row N={N_val}",
-        f"2) Highlight column α={alpha}",
-        "3) Intersection => T₍crit₎"
-    ]
-    if step>= len(steps_text):
-        st.write("All steps complete!")
-    else:
-        st.write(steps_text[step])
-
-    if st.button("Next Step", key=key_prefix+"_table_btn"):
-        st.session_state[step_key]+=1
-
-
-###############################################################################
-#                 7) BINOMIAL TAB
-###############################################################################
-
-def show_binomial_tab():
-    st.subheader("Tab 7 • Binomial")
-
-    c1,c2= st.columns(2)
-    with c1:
-        n= st.number_input("n (trials)", value=20, min_value=1, step=1, key="b_n")
-        p= st.number_input("p (null proportion)", value=0.5, step=0.01, min_value=0.01, max_value=0.99, key="b_p")
-    with c2:
-        k= st.number_input("k (successes)", value=12, min_value=0, step=1, key="b_k")
-        alpha= st.number_input("α (two-tailed)", value=0.05, step=0.01, min_value=0.0001, max_value=0.5, key="b_alpha")
-
-    if st.button("Update Plot (Binomial)", key="b_plot_btn"):
-        fig= plot_binomial(n, p, k)
-        st.pyplot(fig)
-
-    with st.expander("Quick table (k ±5)"):
-        show_binomial_table(n, p, k, alpha, "b_tab")
-
-
-def plot_binomial(n, p, k):
-    x= np.arange(n+1)
-    pmf= stats.binom.pmf(x,n,p)
-    fig, ax= plt.subplots(figsize=(12,4), dpi=100)
-    ax.bar(x, pmf, color='lightgrey', label="P(X=k)")
-    if 0<=k<=n:
-        ax.bar(k, pmf[k], color='blue', label=f"k={k}")
-    ax.set_title(f"Binomial (n={n}, p={p}) – k={k}")
-    ax.set_xlabel("k")
-    ax.set_ylabel("P(X=k)")
-    ax.legend()
-    fig.tight_layout()
-    return fig
-
-
-def show_binomial_table(n, p, k, alpha, key_prefix):
-    """
-    Step-by-step highlight for a partial table ±5 around k,
-    showing P(X=k), P(X≤k), P(X≥k).
-    """
-    step_key= key_prefix+"_step"
-    if step_key not in st.session_state:
-        st.session_state[step_key]=0
-    step= st.session_state[step_key]
-
-    k_min= max(0,k-5)
-    k_max= min(n, k+5)
-    k_list= range(k_min, k_max+1)
-
-    # Build table
-    header= "<th>P(X=k)</th><th>P(X≤k)</th><th>P(X≥k)</th>"
-    rows_html=""
-    for kk in k_list:
-        pmf= stats.binom.pmf(kk,n,p)
-        cdf= stats.binom.cdf(kk,n,p)
-        sf= 1- stats.binom.cdf(kk-1,n,p) if kk>0 else 1.0
-        rows_html+= (f'<tr><td id="bin_{kk}_0">{kk}</td>'
-                     f'<td id="bin_{kk}_1">{pmf:.4f}</td>'
-                     f'<td id="bin_{kk}_2">{cdf:.4f}</td>'
-                     f'<td id="bin_{kk}_3">{sf:.4f}</td></tr>\n')
-
-    css= """
-    table {
-      border-collapse: collapse;
-      margin-top: 10px;
-    }
-    table td, table th {
-      border:1px solid #000;
-      width:80px; height:30px;
-      text-align:center; font-size:0.8rem;
-    }
-    table th {
-      background-color:#f0f0f0;
-    }
-    """
-    table_body= f"<tr><th>k</th>{header}</tr>\n{rows_html}"
-    html_out= wrap_html_table(css, table_body)
+        crit=stats.norm.ppf(1-a/2)
+        ax.fill_between(x[x>= crit],y[x>= crit],'red',alpha=.3)
+        ax.fill_between(x[x<=-crit],y[x<=-crit],'red',alpha=.3,
+                        label="Reject H₀")
+        ax.axvline( crit,'g','--'); ax.axvline(-crit,'g','--')
+        place_label(ax,labels, crit,stats.norm.pdf( crit)+.02,
+                    f"+z₍crit₎={crit:.3f}","green")
+        place_label(ax,labels,-crit,stats.norm.pdf(-crit)+.02,
+                    f"–z₍crit₎={crit:.3f}","green")
+        reject=abs(z)>crit
+    ax.axvline(z,'b','--')
+    place_label(ax,labels,z,stats.norm.pdf(z)+.02,
+                f"z₍calc₎={z:.3f}","blue")
+    ax.set_title(f"z‑Distribution – "
+                 f"{'Reject' if reject else 'Fail to Reject'} H₀")
+    ax.legend(); fig.tight_layout(); return fig
+
+def z_table(z_in,key):
+    step=st.session_state.setdefault(key+"_step",-1)
+    z=max(0,min(3.49,z_in))
+    row=np.floor(z*10)/10; col=round(z-row,2)
+    rows=np.round(np.arange(0,3.5,.1),1)
+    cols=np.round(np.arange(0,.1,.01),2)
+    r_idx=np.where(rows==row)[0][0]
+    sub=rows[max(0,r_idx-10):min(len(rows),r_idx+11)]
+
+    head="".join(f"<th>{c:.2f}</th>" for c in cols)
+    body=""
+    for r in sub:
+        body+=f'<tr><td id="z_{r:.1f}_0">{r:.1f}</td>'
+        for c in cols:
+            body+=(f'<td id="z_{r:.1f}_{c:.2f}">'
+                   f'{stats.norm.cdf(r+c):.4f}</td>')
+        body+="</tr>"
+    css=("table{border-collapse:collapse}"
+         "td,th{border:1px solid#000;width:70px;height:30px;"
+         "text-align:center;font-size:.9rem}")
+    html=wrap(css,f"<tr><th>z.x</th>{head}</tr>{body}")
 
     if step>=0:
-        # highlight entire row for k
-        for cc in range(4):
-            html_out= style_cell(html_out, f"bin_{k}_{cc}")
+        for c in cols: html=style(html,f"z_{row:.1f}_{c:.2f}")
+        html=style(html,f"z_{row:.1f}_0")
     if step>=1:
-        # highlight the pmf cell specifically
-        html_out= style_cell(html_out, f"bin_{k}_1", "blue", 3)
+        for r in sub: html=style(html,f"z_{r:.1f}_{col:.2f}")
+    if step>=2:
+        html=style(html,f"z_{row:.1f}_{col:.2f}","blue",3)
 
-    show_html_table(html_out)
-
-    steps_list= [
-        f"1) Highlight k row={k}",
-        "2) Highlight P(X=k)"
-    ]
-    if step>= len(steps_list):
-        st.write("All steps complete!")
-    else:
-        st.write(steps_list[step])
-
-    if st.button("Next Step", key=key_prefix+"_table_btn"):
-        st.session_state[step_key]+=1
-
+    show_html(html)
+    msgs=["Highlight row","Highlight column","Intersection → Φ(z)"]
+    if step<0: st.write("Click **Next Step** to begin.")
+    elif step>=len(msgs): st.write("All steps complete!")
+    else: st.write(f"**Step {step+1}**: {msgs[step]}")
+    next_step(key+"_step")
 
 ###############################################################################
-#                                MAIN
+#                             3 • F‑Distribution
+###############################################################################
+
+def tab_f():
+    st.subheader("Tab 3 • F‑Distribution")
+    c1,c2=st.columns(2)
+    with c1:
+        f_val=st.number_input("F statistic", value=4.32, key="f_val")
+        df1  =st.number_input("df₁ (numerator)", min_value=1,
+                              value=5, step=1, key="f_df1")
+    with c2:
+        df2  =st.number_input("df₂ (denominator)", min_value=1,
+                              value=20, step=1, key="f_df2")
+        alpha=st.number_input("α", value=0.05, step=0.01,
+                              min_value=0.0001,max_value=0.5, key="f_a")
+    if st.button("Update Plot", key="f_plot"):
+        st.pyplot(plot_f(f_val,df1,df2,alpha))
+    with st.expander("Step‑by‑step F‑table"):
+        f_table(df1,df2,alpha,"f")
+
+def f_crit(df1,df2,a): return stats.f.ppf(1-a, df1, df2)
+
+def plot_f(f_val,df1,df2,a):
+    fig,ax=plt.subplots(figsize=(12,4),dpi=100)
+    x=np.linspace(0, stats.f.ppf(.995,df1,df2)*1.1,400)
+    y=stats.f.pdf(x,df1,df2)
+    ax.plot(x,y,'k')
+    ax.fill_between(x,y,color="lightgrey",alpha=.2,
+                    label="Fail to Reject H₀")
+    crit=f_crit(df1,df2,a)
+    ax.fill_between(x[x>=crit],y[x>=crit],'red',alpha=.3,
+                    label="Reject H₀")
+    ax.axvline(crit,'g','--'); ax.axvline(f_val,'b','--')
+    place_label(ax,[],crit,stats.f.pdf(crit,df1,df2)+.02,
+                f"F₍crit₎={crit:.3f}","green")
+    place_label(ax,[],f_val,stats.f.pdf(f_val,df1,df2)+.02,
+                f"F₍calc₎={f_val:.3f}","blue")
+    ax.set_title(f"F‑Distribution (df₁={df1}, df₂={df2}) – "
+                 f"{'Reject' if f_val>crit else 'Fail to Reject'} H₀")
+    ax.legend(); fig.tight_layout(); return fig
+
+def f_table(df1,df2,a,key):
+    step=st.session_state.setdefault(key+"_step",-1)
+    rows=list(range(max(1,df1-5),df1+6))
+    cols=list(range(max(1,df2-5),df2+6))
+    header="".join(f"<th>{c}</th>" for c in cols)
+    body=""
+    for r in rows:
+        body+=f'<tr><td id="f_{r}_0">{r}</td>'
+        for idx,c in enumerate(cols,1):
+            body+=f'<td id="f_{r}_{idx}">{f_crit(r,c,a):.3f}</td>'
+        body+="</tr>"
+    css=("table{border-collapse:collapse}"
+         "td,th{border:1px solid#000;width:90px;height:30px;"
+         "text-align:center;font-size:.85rem}")
+    html=wrap(css,f"<tr><th>df₁＼df₂</th>{header}</tr>{body}")
+
+    col_idx=cols.index(df2)+1
+    if step>=0:
+        for i in range(len(cols)+1): html=style(html,f"f_{df1}_{i}")
+    if step>=1:
+        for r in rows: html=style(html,f"f_{r}_{col_idx}")
+    if step>=2:
+        html=style(html,f"f_{df1}_{col_idx}","blue",3)
+
+    show_html(html)
+    msgs=["Highlight df₁ row","Highlight df₂ column","Intersection → F₍crit₎"]
+    if step<0: st.write("Click **Next Step** to begin.")
+    elif step>=len(msgs): st.write("All steps complete!")
+    else: st.write(f"**Step {step+1}**: {msgs[step]}")
+    next_step(key+"_step")
+
+###############################################################################
+#                             4 • Chi‑Square
+###############################################################################
+
+def tab_chi():
+    st.subheader("Tab 4 • Chi‑Square (χ²)")
+    c1,c2=st.columns(2)
+    with c1:
+        chi_val=st.number_input("χ² statistic", value=7.88, key="c_val")
+        df     =st.number_input("df", min_value=1, value=3,
+                                step=1, key="c_df")
+    with c2:
+        alpha=st.selectbox("α",[.10,.05,.01,.001],index=1,key="c_a")
+    if st.button("Update Plot", key="c_plot"):
+        st.pyplot(plot_chi(chi_val,df,alpha))
+    with st.expander("Step‑by‑step χ²‑table"):
+        chi_table(df,alpha,"c")
+
+def chi_crit(df,a): return stats.chi2.ppf(1-a, df)
+
+def plot_chi(chi_val,df,a):
+    fig,ax=plt.subplots(figsize=(12,4),dpi=100)
+    x=np.linspace(0,chi_crit(df,.001)*1.1,400)
+    y=stats.chi2.pdf(x,df)
+    ax.plot(x,y,'k')
+    ax.fill_between(x,y,color="lightgrey",alpha=.2,
+                    label="Fail to Reject H₀")
+    crit=chi_crit(df,a)
+    ax.fill_between(x[x>=crit],y[x>=crit],'red',alpha=.3,label="Reject H₀")
+    ax.axvline(crit,'g','--'); ax.axvline(chi_val,'b','--')
+    place_label(ax,[],crit,stats.chi2.pdf(crit,df)+.02,
+                f"χ²₍crit₎={crit:.3f}","green")
+    place_label(ax,[],chi_val,stats.chi2.pdf(chi_val,df)+.02,
+                f"χ²₍calc₎={chi_val:.3f}","blue")
+    ax.set_title(f"χ²‑Distribution (df={df}) – "
+                 f"{'Reject' if chi_val>crit else 'Fail to Reject'} H₀")
+    ax.legend(); fig.tight_layout(); return fig
+
+def chi_table(df,a,key):
+    step=st.session_state.setdefault(key+"_step",-1)
+    rows=list(range(max(1,df-5),df+6))
+    alphas=[.10,.05,.01,.001]
+    header="".join(f"<th>{al}</th>" for al in alphas)
+    body=""
+    for r in rows:
+        body+=f'<tr><td id="chi_{r}_0">{r}</td>'
+        for idx,al in enumerate(alphas,1):
+            body+=f'<td id="chi_{r}_{idx}">{chi_crit(r,al):.3f}</td>'
+        body+="</tr>"
+    css=("table{border-collapse:collapse}"
+         "td,th{border:1px solid#000;width:80px;height:30px;"
+         "text-align:center;font-size:.85rem}")
+    html=wrap(css,f"<tr><th>df＼α</th>{header}</tr>{body}")
+
+    col_idx=alphas.index(a)+1
+    if step>=0:
+        for i in range(len(alphas)+1): html=style(html,f"chi_{df}_{i}")
+    if step>=1:
+        for r in rows: html=style(html,f"chi_{r}_{col_idx}")
+    if step>=2:
+        html=style(html,f"chi_{df}_{col_idx}","blue",3)
+
+    show_html(html)
+    msgs=["Highlight df row","Highlight α column","Intersection → χ²₍crit₎"]
+    if step<0: st.write("Click **Next Step** to begin.")
+    elif step>=len(msgs): st.write("All steps complete!")
+    else: st.write(f"**Step {step+1}**: {msgs[step]}")
+    next_step(key+"_step")
+
+###############################################################################
+#                        5 • Mann‑Whitney U
+###############################################################################
+
+def tab_u():
+    st.subheader("Tab 5 • Mann–Whitney U")
+    c1,c2=st.columns(2)
+    with c1:
+        u_val=st.number_input("U statistic", value=23, key="u_val")
+        n1   =st.number_input("n₁", min_value=2, value=10,
+                              step=1, key="u_n1")
+    with c2:
+        n2   =st.number_input("n₂", min_value=2, value=12,
+                              step=1, key="u_n2")
+        alpha=st.number_input("α", value=0.05, step=0.01,
+                              min_value=0.0001,max_value=0.5, key="u_a")
+        tail =st.radio("Tail",["one‑tailed","two‑tailed"], key="u_tail")
+    if st.button("Update Plot", key="u_plot"):
+        st.pyplot(plot_u(u_val,n1,n2,alpha,tail))
+    with st.expander("Step‑by‑step U‑table"):
+        u_table(n1,n2,alpha,tail,"u")
+
+def u_crit(n1,n2,a,tail):
+    mu=n1*n2/2
+    sigma=np.sqrt(n1*n2*(n1+n2+1)/12)
+    z=stats.norm.ppf(a if tail=="one‑tailed" else a/2)
+    return int(np.floor(mu+z*sigma))
+
+def plot_u(u_val,n1,n2,a,tail):
+    mu=n1*n2/2 ; sigma=np.sqrt(n1*n2*(n1+n2+1)/12)
+    fig,ax=plt.subplots(figsize=(12,4),dpi=100)
+    x=np.linspace(mu-4*sigma,mu+4*sigma,400)
+    y=stats.norm.pdf(x,mu,sigma)
+    ax.plot(x,y,'k')
+    ax.fill_between(x,y,color="lightgrey",alpha=.2,
+                    label="Fail to Reject H₀")
+    if tail=="one‑tailed":
+        crit=u_crit(n1,n2,a,tail)
+        ax.fill_between(x[x<=crit],y[x<=crit],'red',alpha=.3,
+                        label="Reject H₀")
+        ax.axvline(crit,'g','--')
+        place_label(ax,[],crit,stats.norm.pdf(crit,mu,sigma)+.02,
+                    f"U₍crit₎={crit}","green")
+        reject=u_val<=crit
+    else:
+        crit=u_crit(n1,n2,a,tail); high=n1*n2-crit
+        ax.fill_between(x[x<=crit],y[x<=crit],'red',alpha=.3)
+        ax.fill_between(x[x>=high],y[x>=high],'red',alpha=.3,
+                        label="Reject H₀")
+        ax.axvline(crit,'g','--'); ax.axvline(high,'g','--')
+        place_label(ax,[],crit,stats.norm.pdf(crit,mu,sigma)+.02,
+                    f"U₍crit₎={crit}","green")
+        reject=u_val<=crit or u_val>=high
+    ax.axvline(u_val,'b','--')
+    place_label(ax,[],u_val,stats.norm.pdf(u_val,mu,sigma)+.02,
+                f"U₍calc₎={u_val}","blue")
+    ax.set_title(f"Mann–Whitney U – "
+                 f"{'Reject' if reject else 'Fail to Reject'} H₀")
+    ax.legend(); fig.tight_layout(); return fig
+
+def u_table(n1,n2,a,tail,key):
+    step=st.session_state.setdefault(key+"_step",-1)
+    rows=list(range(max(2,n1-5),n1+6))
+    cols=list(range(max(2,n2-5),n2+6))
+    header="".join(f"<th>{c}</th>" for c in cols)
+    body=""
+    for r in rows:
+        body+=f'<tr><td id="u_{r}_0">{r}</td>'
+        for idx,c in enumerate(cols,1):
+            body+=f'<td id="u_{r}_{idx}">{u_crit(r,c,a,tail)}</td>'
+        body+="</tr>"
+    css=("table{border-collapse:collapse}"
+         "td,th{border:1px solid#000;width:90px;height:30px;"
+         "text-align:center;font-size:.8rem}")
+    html=wrap(css,f"<tr><th>n₁＼n₂</th>{header}</tr>{body}")
+
+    col_idx=cols.index(n2)+1
+    if step>=0:
+        for i in range(len(cols)+1): html=style(html,f"u_{n1}_{i}")
+    if step>=1:
+        for r in rows: html=style(html,f"u_{r}_{col_idx}")
+    if step>=2:
+        html=style(html,f"u_{n1}_{col_idx}","blue",3)
+
+    show_html(html)
+    msgs=["Highlight n₁ row","Highlight n₂ column","Intersection → U₍crit₎"]
+    if step<0: st.write("Click **Next Step** to begin.")
+    elif step>=len(msgs): st.write("All steps complete!")
+    else: st.write(f"**Step {step+1}**: {msgs[step]}")
+    next_step(key+"_step")
+
+###############################################################################
+#                         6 • Wilcoxon Signed‑Rank T
+###############################################################################
+
+def tab_w():
+    st.subheader("Tab 6 • Wilcoxon Signed‑Rank T")
+    c1,c2=st.columns(2)
+    with c1:
+        t_val=st.number_input("T statistic", value=15, key="w_val")
+        n    =st.number_input("N (non‑zero diffs)", min_value=5,
+                              value=12, step=1, key="w_n")
+    with c2:
+        alpha=st.number_input("α", value=0.05, step=0.01,
+                              min_value=0.0001,max_value=0.5, key="w_a")
+        tail =st.radio("Tail",["one‑tailed","two‑tailed"], key="w_tail")
+    if st.button("Update Plot", key="w_plot"):
+        st.pyplot(plot_w(t_val,n,alpha,tail))
+    with st.expander("Step‑by‑step T‑table"):
+        w_table(n,alpha,tail,"w")
+
+def w_crit(n,a,tail):
+    mu=n*(n+1)/4
+    sigma=np.sqrt(n*(n+1)*(2*n+1)/24)
+    z=stats.norm.ppf(a if tail=="one‑tailed" else a/2)
+    return int(np.floor(mu+z*sigma))
+
+def plot_w(t_val,n,a,tail):
+    mu=n*(n+1)/4 ; sigma=np.sqrt(n*(n+1)*(2*n+1)/24)
+    fig,ax=plt.subplots(figsize=(12,4),dpi=100)
+    x=np.linspace(mu-4*sigma,mu+4*sigma,400)
+    y=stats.norm.pdf(x,mu,sigma)
+    ax.plot(x,y,'k')
+    ax.fill_between(x,y,color="lightgrey",alpha=.2,
+                    label="Fail to Reject H₀")
+    if tail=="one‑tailed":
+        crit=w_crit(n,a,tail)
+        ax.fill_between(x[x<=crit],y[x<=crit],'red',alpha=.3,
+                        label="Reject H₀")
+        ax.axvline(crit,'g','--')
+        place_label(ax,[],crit,stats.norm.pdf(crit,mu,sigma)+.02,
+                    f"T₍crit₎={crit}","green")
+        reject=t_val<=crit
+    else:
+        crit=w_crit(n,a,tail); high=n*(n+1)/2-crit
+        ax.fill_between(x[x<=crit],y[x<=crit],'red',alpha=.3)
+        ax.fill_between(x[x>=high],y[x>=high],'red',alpha=.3,
+                        label="Reject H₀")
+        ax.axvline(crit,'g','--'); ax.axvline(high,'g','--')
+        place_label(ax,[],crit,stats.norm.pdf(crit,mu,sigma)+.02,
+                    f"T₍crit₎={crit}","green")
+        reject=t_val<=crit or t_val>=high
+    ax.axvline(t_val,'b','--')
+    place_label(ax,[],t_val,stats.norm.pdf(t_val,mu,sigma)+.02,
+                f"T₍calc₎={t_val}","blue")
+    ax.set_title(f"Wilcoxon T – "
+                 f"{'Reject' if reject else 'Fail to Reject'} H₀")
+    ax.legend(); fig.tight_layout(); return fig
+
+def w_table(n,a,tail,key):
+    step=st.session_state.setdefault(key+"_step",-1)
+    rows=list(range(max(5,n-5),n+6))
+    alphas=[.10,.05,.01,.001]
+    header="".join(f"<th>{al}</th>" for al in alphas)
+    body=""
+    for r in rows:
+        body+=f'<tr><td id="w_{r}_0">{r}</td>'
+        for idx,al in enumerate(alphas,1):
+            body+=f'<td id="w_{r}_{idx}">{w_crit(r,al,tail)}</td>'
+        body+="</tr>"
+    css=("table{border-collapse:collapse}"
+         "td,th{border:1px solid#000;width:80px;height:30px;"
+         "text-align:center;font-size:.8rem}")
+    html=wrap(css,f"<tr><th>N＼α</th>{header}</tr>{body}")
+
+    col_idx=alphas.index(a)+1
+    if step>=0:
+        for i in range(len(alphas)+1): html=style(html,f"w_{n}_{i}")
+    if step>=1:
+        for r in rows: html=style(html,f"w_{r}_{col_idx}")
+    if step>=2:
+        html=style(html,f"w_{n}_{col_idx}","blue",3)
+
+    show_html(html)
+    msgs=["Highlight N row","Highlight α column","Intersection → T₍crit₎"]
+    if step<0: st.write("Click **Next Step** to begin.")
+    elif step>=len(msgs): st.write("All steps complete!")
+    else: st.write(f"**Step {step+1}**: {msgs[step]}")
+    next_step(key+"_step")
+
+###############################################################################
+#                               7 • Binomial
+###############################################################################
+
+def tab_binom():
+    st.subheader("Tab 7 • Binomial")
+    c1,c2=st.columns(2)
+    with c1:
+        n=st.number_input("n (trials)", min_value=1, value=20,
+                          step=1, key="b_n")
+        p=st.number_input("π (null proportion)", value=0.50, step=0.01,
+                          min_value=0.01,max_value=0.99, key="b_p")
+    with c2:
+        k=st.number_input("k (successes)", min_value=0, value=12,
+                          step=1, key="b_k")
+        alpha=st.number_input("α (two‑tailed)", value=0.05, step=0.01,
+                              min_value=0.0001,max_value=0.5, key="b_a")
+    if st.button("Update Plot", key="b_plot"):
+        st.pyplot(plot_binom(k,n,p))
+    with st.expander("Quick table (k ±5)"):
+        binom_table(k,n,p,"b")
+
+def plot_binom(k,n,p):
+    x=np.arange(0,n+1); y=stats.binom.pmf(x,n,p)
+    fig,ax=plt.subplots(figsize=(12,4),dpi=100)
+    ax.bar(x,y,color="lightgrey",label="P(X=k)")
+    ax.bar(k,stats.binom.pmf(k,n,p),color="blue",label="k observed")
+    ax.set_xlabel("k"); ax.set_ylabel("P(X=k)")
+    ax.set_title(f"Binomial (n={n}, p={p}) – k={k}")
+    ax.legend(); fig.tight_layout(); return fig
+
+def binom_table(k,n,p,key):
+    step=st.session_state.setdefault(key+"_step",-1)
+    ks=list(range(max(0,k-5),min(n,k+5)+1))
+    head="<th>P(X=k)</th><th>P(X≤k)</th><th>P(X≥k)</th>"
+    body=""
+    for k_ in ks:
+        pmf=stats.binom.pmf(k_,n,p)
+        cdf=stats.binom.cdf(k_,n,p)
+        sf =1-stats.binom.cdf(k_-1,n,p)
+        body+=(f'<tr><td id="b_{k_}_0">{k_}</td>'
+               f'<td id="b_{k_}_1">{pmf:.4f}</td>'
+               f'<td id="b_{k_}_2">{cdf:.4f}</td>'
+               f'<td id="b_{k_}_3">{sf:.4f}</td></tr>')
+    css=("table{border-collapse:collapse}"
+         "td,th{border:1px solid#000;width:120px;height:30px;"
+         "text-align:center;font-size:.8rem}")
+    html=wrap(css,f"<tr><th>k</th>{head}</tr>{body}")
+
+    if step>=0:
+        for i in range(4): html=style(html,f"b_{k}_{i}")
+    if step>=1:
+        html=style(html,f"b_{k}_1","blue",3)
+
+    show_html(html)
+    msgs=["Highlight k row","Highlight P(X=k)"]
+    if step<0: st.write("Click **Next Step** to begin.")
+    elif step>=len(msgs): st.write("All steps complete!")
+    else: st.write(f"**Step {step+1}**: {msgs[step]}")
+    next_step(key+"_step")
+
+###############################################################################
+#                                   MAIN
 ###############################################################################
 
 def main():
-    st.set_page_config("PSYC250 – Statistical Tables Explorer (12×4 Figures)",
-                       layout="wide")
-    st.title("PSYC250 – Statistical Tables Explorer (12 × 4 figures)")
+    st.set_page_config("PSYC250 – Statistical Tables Explorer", layout="wide")
+    st.title("PSYC250 – Statistical Tables Explorer (12 × 4 figures)")
 
-    tabs = st.tabs([
-        "t-Dist",
-        "z-Dist",
-        "F-Dist",
-        "Chi-Square",
-        "Mann–Whitney U",
-        "Wilcoxon T",
-        "Binomial"
-    ])
+    tabs=st.tabs(["t‑Dist","z‑Dist","F‑Dist","Chi‑Square",
+                  "Mann–Whitney U","Wilcoxon T","Binomial"])
+    with tabs[0]: tab_t()
+    with tabs[1]: tab_z()
+    with tabs[2]: tab_f()
+    with tabs[3]: tab_chi()
+    with tabs[4]: tab_u()
+    with tabs[5]: tab_w()
+    with tabs[6]: tab_binom()
 
-    with tabs[0]:
-        show_t_tab()
-    with tabs[1]:
-        show_z_tab()
-    with tabs[2]:
-        show_f_tab()
-    with tabs[3]:
-        show_chi_tab()
-    with tabs[4]:
-        show_mannwhitney_tab()
-    with tabs[5]:
-        show_wilcoxon_tab()
-    with tabs[6]:
-        show_binomial_tab()
-
-
-if __name__=="__main__":
+if __name__ == "__main__":
     main()
