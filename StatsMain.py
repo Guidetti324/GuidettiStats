@@ -4,10 +4,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy import stats
 
-plt.switch_backend("Agg")                 # always headless
+plt.switch_backend("Agg")                     # headless backend
 
 ###############################################################################
-#                                GENERIC HELPERS
+#                               GENERIC HELPERS
 ###############################################################################
 
 def place_label(ax, placed, x, y, txt, color="blue"):
@@ -15,7 +15,8 @@ def place_label(ax, placed, x, y, txt, color="blue"):
     for xx, yy in placed:
         if abs(x - xx) < .15 and abs(y - yy) < .05:
             dx += .06; dy += .04
-    ax.text(x + dx, y + dy, txt, color=color, ha="left", va="bottom", fontsize=8)
+    ax.text(x + dx, y + dy, txt, color=color,
+            ha="left", va="bottom", fontsize=8)
     placed.append((x + dx, y + dy))
 
 def style(html: str, cid: str, color: str = "red", px: int = 2) -> str:
@@ -65,7 +66,7 @@ def plot_t(t, df, a, tail):
         crit = stats.t.ppf(1-a, df)
         ax.fill_between(x[x>=crit], y[x>=crit],
                         color="red", alpha=.3, label="Reject H₀")
-        ax.axvline(crit, color="green", ls="--")
+        ax.axvline(crit, color="green", linestyle="--")
         place_label(ax, labels, crit, stats.t.pdf(crit, df)+.02,
                     f"t₍crit₎={crit:.3f}", "green")
         reject = t > crit
@@ -74,14 +75,14 @@ def plot_t(t, df, a, tail):
         ax.fill_between(x[x>= crit], y[x>= crit], 'red', alpha=.3)
         ax.fill_between(x[x<=-crit], y[x<=-crit], 'red', alpha=.3,
                         label="Reject H₀")
-        ax.axvline( crit, color="green", ls="--")
-        ax.axvline(-crit, color="green", ls="--")
+        ax.axvline( crit, color="green", linestyle="--")
+        ax.axvline(-crit, color="green", linestyle="--")
         place_label(ax, labels,  crit, stats.t.pdf( crit, df)+.02,
                     f"+t₍crit₎={crit:.3f}", "green")
         place_label(ax, labels, -crit, stats.t.pdf(-crit, df)+.02,
                     f"–t₍crit₎={crit:.3f}", "green")
         reject = abs(t) > crit
-    ax.axvline(t, color="blue", ls="--")
+    ax.axvline(t, color="blue", linestyle="--")
     place_label(ax, labels, t, stats.t.pdf(t, df)+.02,
                 f"t₍calc₎={t:.3f}", "blue")
     ax.set_title(f"t‑Distribution (df={df}) – "
@@ -157,7 +158,7 @@ def plot_z(z,a,tail):
     if tail=="one‑tailed":
         crit=stats.norm.ppf(1-a)
         ax.fill_between(x[x>=crit],y[x>=crit],'red',alpha=.3,label="Reject H₀")
-        ax.axvline(crit,'g','--')
+        ax.axvline(crit, color="green", linestyle="--")
         place_label(ax,labels,crit,stats.norm.pdf(crit)+.02,
                     f"z₍crit₎={crit:.3f}","green")
         reject=z>crit
@@ -166,13 +167,14 @@ def plot_z(z,a,tail):
         ax.fill_between(x[x>= crit],y[x>= crit],'red',alpha=.3)
         ax.fill_between(x[x<=-crit],y[x<=-crit],'red',alpha=.3,
                         label="Reject H₀")
-        ax.axvline( crit,'g','--'); ax.axvline(-crit,'g','--')
+        ax.axvline( crit,color="green",linestyle="--")
+        ax.axvline(-crit,color="green",linestyle="--")
         place_label(ax,labels, crit,stats.norm.pdf( crit)+.02,
                     f"+z₍crit₎={crit:.3f}","green")
         place_label(ax,labels,-crit,stats.norm.pdf(-crit)+.02,
                     f"–z₍crit₎={crit:.3f}","green")
         reject=abs(z)>crit
-    ax.axvline(z,'b','--')
+    ax.axvline(z,color="blue",linestyle="--")
     place_label(ax,labels,z,stats.norm.pdf(z)+.02,
                 f"z₍calc₎={z:.3f}","blue")
     ax.set_title(f"z‑Distribution – "
@@ -249,7 +251,8 @@ def plot_f(f_val,df1,df2,a):
     crit=f_crit(df1,df2,a)
     ax.fill_between(x[x>=crit],y[x>=crit],'red',alpha=.3,
                     label="Reject H₀")
-    ax.axvline(crit,'g','--'); ax.axvline(f_val,'b','--')
+    ax.axvline(crit, color="green", linestyle="--")
+    ax.axvline(f_val, color="blue", linestyle="--")
     place_label(ax,[],crit,stats.f.pdf(crit,df1,df2)+.02,
                 f"F₍crit₎={crit:.3f}","green")
     place_label(ax,[],f_val,stats.f.pdf(f_val,df1,df2)+.02,
@@ -318,7 +321,8 @@ def plot_chi(chi_val,df,a):
                     label="Fail to Reject H₀")
     crit=chi_crit(df,a)
     ax.fill_between(x[x>=crit],y[x>=crit],'red',alpha=.3,label="Reject H₀")
-    ax.axvline(crit,'g','--'); ax.axvline(chi_val,'b','--')
+    ax.axvline(crit, color="green", linestyle="--")
+    ax.axvline(chi_val, color="blue", linestyle="--")
     place_label(ax,[],crit,stats.chi2.pdf(crit,df)+.02,
                 f"χ²₍crit₎={crit:.3f}","green")
     place_label(ax,[],chi_val,stats.chi2.pdf(chi_val,df)+.02,
@@ -398,7 +402,7 @@ def plot_u(u_val,n1,n2,a,tail):
         crit=u_crit(n1,n2,a,tail)
         ax.fill_between(x[x<=crit],y[x<=crit],'red',alpha=.3,
                         label="Reject H₀")
-        ax.axvline(crit,'g','--')
+        ax.axvline(crit, color="green", linestyle="--")
         place_label(ax,[],crit,stats.norm.pdf(crit,mu,sigma)+.02,
                     f"U₍crit₎={crit}","green")
         reject=u_val<=crit
@@ -407,11 +411,12 @@ def plot_u(u_val,n1,n2,a,tail):
         ax.fill_between(x[x<=crit],y[x<=crit],'red',alpha=.3)
         ax.fill_between(x[x>=high],y[x>=high],'red',alpha=.3,
                         label="Reject H₀")
-        ax.axvline(crit,'g','--'); ax.axvline(high,'g','--')
+        ax.axvline(crit, color="green", linestyle="--")
+        ax.axvline(high, color="green", linestyle="--")
         place_label(ax,[],crit,stats.norm.pdf(crit,mu,sigma)+.02,
                     f"U₍crit₎={crit}","green")
         reject=u_val<=crit or u_val>=high
-    ax.axvline(u_val,'b','--')
+    ax.axvline(u_val, color="blue", linestyle="--")
     place_label(ax,[],u_val,stats.norm.pdf(u_val,mu,sigma)+.02,
                 f"U₍calc₎={u_val}","blue")
     ax.set_title(f"Mann–Whitney U – "
@@ -487,7 +492,7 @@ def plot_w(t_val,n,a,tail):
         crit=w_crit(n,a,tail)
         ax.fill_between(x[x<=crit],y[x<=crit],'red',alpha=.3,
                         label="Reject H₀")
-        ax.axvline(crit,'g','--')
+        ax.axvline(crit, color="green", linestyle="--")
         place_label(ax,[],crit,stats.norm.pdf(crit,mu,sigma)+.02,
                     f"T₍crit₎={crit}","green")
         reject=t_val<=crit
@@ -496,11 +501,12 @@ def plot_w(t_val,n,a,tail):
         ax.fill_between(x[x<=crit],y[x<=crit],'red',alpha=.3)
         ax.fill_between(x[x>=high],y[x>=high],'red',alpha=.3,
                         label="Reject H₀")
-        ax.axvline(crit,'g','--'); ax.axvline(high,'g','--')
+        ax.axvline(crit, color="green", linestyle="--")
+        ax.axvline(high, color="green", linestyle="--")
         place_label(ax,[],crit,stats.norm.pdf(crit,mu,sigma)+.02,
                     f"T₍crit₎={crit}","green")
         reject=t_val<=crit or t_val>=high
-    ax.axvline(t_val,'b','--')
+    ax.axvline(t_val, color="blue", linestyle="--")
     place_label(ax,[],t_val,stats.norm.pdf(t_val,mu,sigma)+.02,
                 f"T₍calc₎={t_val}","blue")
     ax.set_title(f"Wilcoxon T – "
