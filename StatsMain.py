@@ -10,24 +10,30 @@
 #     6) Wilcoxon Signed‑Rank T
 #     7) Binomial
 #
-#  Each tab now ends with a full APA‑7 narrative that includes:
-#     1.  Calculated test statistic & its p‑value
-#     2.  Critical test statistic & its p‑value
-#     3.  Decision explained via statistic comparison
-#     4.  Decision explained via p‑value comparison
-#     5.  Concise APA‑style conclusion
+#  Each tab:
+#     • Input widgets
+#     • 12 × 4 Matplotlib plot
+#     • Step‑wise HTML lookup table
+#     • Full APA‑7 narrative with:
+#         1.  Calculated statistic + p
+#         2.  Critical statistic + p
+#         3.  Decision via statistic comparison
+#         4.  Decision via p‑value comparison
+#         5.  Concise APA conclusion
 #
-#  Dependencies tested with:
-#     Python 3.12.1 • streamlit 1.30.0 • matplotlib 3.8.2 • scipy 1.11.4
+#  Paste this file AS‑IS into app.py and run:
+#     streamlit run app.py
+#
+#  Tested: Python 3.12.1 • streamlit 1.30.0 • matplotlib 3.8.2 • scipy 1.11.4
 ###############################################################################
 
 import streamlit as st
-import streamlit.components.v1 as components
 import numpy as np
 import matplotlib.pyplot as plt
+import streamlit.components.v1 as components
 from scipy import stats
 
-plt.switch_backend("Agg")  # head‑less backend
+plt.switch_backend("Agg")   # head‑less backend for Streamlit
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  Generic helpers
@@ -44,8 +50,9 @@ def place_label(ax, placed, x, y, txt, *, color="blue"):
 
 
 def style_cell(html_in, cell_id, *, color="red", px=2):
-    return html_in.replace(f'id="{cell_id}"',
-                           f'id="{cell_id}" style="border:{px}px solid {color};"', 1)
+    return html_in.replace(
+        f'id="{cell_id}"',
+        f'id="{cell_id}" style="border:{px}px solid {color};"', 1)
 
 
 def iframe(html, *, height=460):
@@ -65,7 +72,7 @@ def wrap(css, inner):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-#  Tab 1 • t‑Distribution
+#  TAB 1 • t‑Distribution
 # ─────────────────────────────────────────────────────────────────────────────
 def tab_t():
     st.subheader("Tab 1 • t‑Distribution")
@@ -77,8 +84,10 @@ def tab_t():
         alpha = st.number_input("α", value=0.05, step=0.01,
                                 min_value=0.0001, max_value=0.5, key="t_alpha")
         tail  = st.radio("Tail", ["one‑tailed", "two‑tailed"], key="t_tail")
+
     if st.button("Update Plot", key="t_plot"):
         st.pyplot(plot_t(t_val, df, alpha, tail))
+
     with st.expander("Step‑by‑step t‑table"):
         t_table(df, alpha, tail, "t")
 
@@ -90,30 +99,30 @@ def plot_t(t_calc, df, alpha, tail):
     ax.plot(xs, ys, "k")
     ax.fill_between(xs, ys, color="lightgrey", alpha=0.25,
                     label="Fail to Reject H₀")
-    labels = []
+    lbl = []
 
     if tail.startswith("one"):
-        crit = stats.t.ppf(1-alpha, df)
+        crit = stats.t.ppf(1 - alpha, df)
         ax.fill_between(xs[xs >= crit], ys[xs >= crit],
                         color="red", alpha=0.30, label="Reject H₀")
         ax.axvline(x=crit, color="green", linestyle="--")
-        place_label(ax, labels, crit, stats.t.pdf(crit, df)+.02,
-                    f"t₍crit₎={crit:.3f}", color="green")
+        place_label(ax, lbl, crit, stats.t.pdf(crit, df)+.02,
+                    f"t₍crit₎={crit:.2f}", color="green")
     else:
-        crit = stats.t.ppf(1-alpha/2, df)
+        crit = stats.t.ppf(1 - alpha/2, df)
         ax.fill_between(xs[xs >= crit], ys[xs >= crit], color="red", alpha=0.30)
         ax.fill_between(xs[xs <=-crit], ys[xs <=-crit], color="red", alpha=0.30,
                         label="Reject H₀")
         ax.axvline(x= crit, color="green", linestyle="--")
         ax.axvline(x=-crit, color="green", linestyle="--")
-        place_label(ax, labels,  crit, stats.t.pdf( crit, df)+.02,
-                    f"+t₍crit₎={crit:.3f}", color="green")
-        place_label(ax, labels, -crit, stats.t.pdf(-crit, df)+.02,
-                    f"–t₍crit₎={crit:.3f}", color="green")
+        place_label(ax, lbl,  crit, stats.t.pdf( crit, df)+.02,
+                    f"+t₍crit₎={crit:.2f}", color="green")
+        place_label(ax, lbl, -crit, stats.t.pdf(-crit, df)+.02,
+                    f"–t₍crit₎={crit:.2f}", color="green")
 
     ax.axvline(x=t_calc, color="blue", linestyle="--")
-    place_label(ax, labels, t_calc, stats.t.pdf(t_calc, df)+.02,
-                f"t₍calc₎={t_calc:.3f}", color="blue")
+    place_label(ax, lbl, t_calc, stats.t.pdf(t_calc, df)+.02,
+                f"t₍calc₎={t_calc:.2f}", color="blue")
     ax.set_title("t‑Distribution")
     ax.legend()
     fig.tight_layout()
@@ -125,82 +134,71 @@ def t_table(df, alpha, tail, key):
     step     = st.session_state.setdefault(step_key, -1)
 
     rows = list(range(max(1, df-5), df+6))
-    headers = [
+    heads = [
         ("one", 0.10), ("one", 0.05), ("one", 0.01), ("one", 0.001),
         ("two", 0.10), ("two", 0.05), ("two", 0.01), ("two", 0.001),
     ]
-    header_html = "".join(f"<th>{m}_{a}</th>" for m,a in headers)
-    body_html   = ""
+    head_html = "".join(f"<th>{m}_{a}</th>" for m,a in heads)
+    body_html = ""
     for r in rows:
         body_html += f'<tr><td id="t_{r}_0">{r}</td>'
-        for idx,(m,a) in enumerate(headers,start=1):
-            body_html += (f'<td id="t_{r}_{idx}">'
-                          f'{stats.t.ppf(1 - a/(1 if m=="one" else 2), r):.3f}</td>')
+        for i,(m,a) in enumerate(heads, start=1):
+            body_html += (f'<td id="t_{r}_{i}">'
+                          f'{stats.t.ppf(1 - a/(1 if m=="one" else 2), r):.2f}</td>')
         body_html += "</tr>"
     css=("table{border-collapse:collapse}"
-         "th,td{border:1px solid #000;width:80px;height:30px;"
+         "th,td{border:1px solid #000;width:85px;height:30px;"
          "text-align:center;font-size:0.9rem;font-family:sans-serif}"
          "th{background:#fafafa}")
-    html=wrap(css,f"<tr><th>df</th>{header_html}</tr>{body_html}")
+    html=wrap(css,f"<tr><th>df</th>{head_html}</tr>{body_html}")
 
-    mode = "one" if tail.startswith("one") else "two"
-    col_idx = next(i for i,(m,a) in enumerate(headers,start=1)
-                   if m==mode and np.isclose(a,alpha))
+    mode="one" if tail.startswith("one") else "two"
+    col_idx=next(i for i,(m,a) in enumerate(heads,start=1)
+                 if m==mode and np.isclose(a,alpha))
 
     if step>=0:
-        for i in range(len(headers)+1):
-            html = style_cell(html, f"t_{df}_{i}")
+        for i in range(len(heads)+1):
+            html=style_cell(html,f"t_{df}_{i}")
     if step>=1:
         for r in rows:
-            html = style_cell(html, f"t_{r}_{col_idx}")
+            html=style_cell(html,f"t_{r}_{col_idx}")
     if step>=2:
-        html = style_cell(html, f"t_{df}_{col_idx}", color="blue", px=3)
-    if step>=3 and tail.startswith("one") and np.isclose(alpha,0.05):
-        alt=headers.index(("two",0.10))+1
-        for r in rows:
-            html=style_cell(html,f"t_{r}_{alt}")
-        html=style_cell(html,f"t_{df}_{alt}",color="blue",px=3)
-
+        html=style_cell(html,f"t_{df}_{col_idx}",color="blue",px=3)
     iframe(html)
-    msgs=["Highlight df row","Highlight α / tail column","Intersection → t₍crit₎"]
-    if tail.startswith("one") and np.isclose(alpha,0.05):
-        msgs.append("Also highlight two‑tailed α = 0.10 equivalence")
+    msgs=["Highlight df row","Highlight α/tail column","Intersection → t₍crit₎"]
     if step<0: st.write("Click **Next Step** to begin.")
     elif step>=len(msgs): st.write("All steps complete!")
     else: st.write(f"**Step {step+1}**: {msgs[step]}")
     next_button(step_key)
 
-    # ── APA narrative ─────────────────────────────────────────────────────
-    t_val = st.session_state["t_val"]
+    # APA narrative
+    t_val=st.session_state["t_val"]
     if tail.startswith("one"):
-        p_calc = stats.t.sf(abs(t_val), df)
-        crit   = stats.t.ppf(1-alpha, df)
-        p_crit = alpha
-        reject = t_val>crit
+        p_calc=stats.t.sf(abs(t_val),df)
+        crit=stats.t.ppf(1-alpha,df)
+        p_crit=alpha
+        reject=t_val>crit
     else:
-        p_calc = stats.t.sf(abs(t_val), df)*2
-        crit   = stats.t.ppf(1-alpha/2, df)
-        p_crit = alpha
-        reject = abs(t_val)>crit
-    decision = "rejected" if reject else "failed to reject"
+        p_calc=stats.t.sf(abs(t_val),df)*2
+        crit=stats.t.ppf(1-alpha/2,df)
+        p_crit=alpha
+        reject=abs(t_val)>crit
+    decision="rejected" if reject else "failed to reject"
     st.markdown(
         f"**Interpretation details**  \n"
         f"*Calculated statistic:* t({df}) = {t_val:.2f}, *p* = {p_calc:.3f}.  \n"
         f"*Critical statistic:* t₍crit₎ = {crit:.2f}, *p* = {p_crit:.3f}.  \n"
-        f"The calculated t is {'greater' if reject else 'not greater'} than the "
-        f"critical value, so H₀ is {'' if reject else 'not '}rejected on that basis.  \n"
-        f"Because the calculated *p* ({p_calc:.3f}) is "
-        f"{'less' if p_calc<p_crit else 'greater'} than the critical *p* "
-        f"({p_crit:.3f}), H₀ is {'' if reject else 'not '}rejected on the "
-        f"p‑value basis.  \n"
-        f"**APA‑style conclusion:** *t*({df}) = {t_val:.2f}, "
-        f"*p* = {p_calc:.3f} ({tail}). H₀ was **{decision}** at "
-        f"α = {alpha:.2f}."
+        f"Calculated t is {'greater' if reject else 'not greater'} than "
+        f"critical t ➔ H₀ {'' if reject else 'not '}rejected.  \n"
+        f"Calculated *p* is {'below' if p_calc<p_crit else 'above'} α ➔ "
+        f"H₀ {'' if p_calc<p_crit else 'not '}rejected.  \n"
+        f"**APA‑style conclusion:** *t*({df}) = {t_val:.2f}, *p* = {p_calc:.3f} "
+        f"({tail}). H₀ was **{decision}** at α = {alpha:.2f}."
     )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-#  Tab 2 • z‑Distribution
+#  TAB 2 • z‑Distribution
 # ─────────────────────────────────────────────────────────────────────────────
 def tab_z():
     st.subheader("Tab 2 • z‑Distribution")
@@ -222,23 +220,30 @@ def plot_z(z_calc, alpha, tail):
     xs=np.linspace(-4,4,400)
     ys=stats.norm.pdf(xs)
     ax.plot(xs,ys,"k")
-    ax.fill_between(xs,ys,color="lightgrey",alpha=0.25,label="Fail to Reject H₀")
+    ax.fill_between(xs,ys,color="lightgrey",alpha=0.25,
+                    label="Fail to Reject H₀")
     lbl=[]
     if tail.startswith("one"):
         crit=stats.norm.ppf(1-alpha)
-        ax.fill_between(xs[xs>=crit],ys[xs>=crit],color="red",alpha=0.30,label="Reject H₀")
+        ax.fill_between(xs[xs>=crit],ys[xs>=crit],
+                        color="red",alpha=0.30,label="Reject H₀")
         ax.axvline(x=crit,color="green",linestyle="--")
-        place_label(ax,lbl,crit,stats.norm.pdf(crit)+.02,f"z₍crit₎={crit:.3f}",color="green")
+        place_label(ax,lbl,crit,stats.norm.pdf(crit)+.02,
+                    f"z₍crit₎={crit:.2f}",color="green")
     else:
         crit=stats.norm.ppf(1-alpha/2)
         ax.fill_between(xs[xs>=crit],ys[xs>=crit],color="red",alpha=0.30)
-        ax.fill_between(xs[xs<=-crit],ys[xs<=-crit],color="red",alpha=0.30,label="Reject H₀")
+        ax.fill_between(xs[xs<=-crit],ys[xs<=-crit],color="red",alpha=0.30,
+                        label="Reject H₀")
         ax.axvline(x= crit,color="green",linestyle="--")
         ax.axvline(x=-crit,color="green",linestyle="--")
-        place_label(ax,lbl, crit,stats.norm.pdf( crit)+.02,f"+z₍crit₎={crit:.3f}",color="green")
-        place_label(ax,lbl,-crit,stats.norm.pdf(-crit)+.02,f"–z₍crit₎={crit:.3f}",color="green")
+        place_label(ax,lbl, crit,stats.norm.pdf( crit)+.02,
+                    f"+z₍crit₎={crit:.2f}",color="green")
+        place_label(ax,lbl,-crit,stats.norm.pdf(-crit)+.02,
+                    f"–z₍crit₎={crit:.2f}",color="green")
     ax.axvline(x=z_calc,color="blue",linestyle="--")
-    place_label(ax,lbl,z_calc,stats.norm.pdf(z_calc)+.02,f"z₍calc₎={z_calc:.3f}",color="blue")
+    place_label(ax,lbl,z_calc,stats.norm.pdf(z_calc)+.02,
+                f"z₍calc₎={z_calc:.2f}",color="blue")
     ax.set_title("z‑Distribution")
     ax.legend()
     fig.tight_layout()
@@ -284,37 +289,36 @@ def z_table(z_in,key,alpha,tail):
     # APA
     z_val=st.session_state["z_val"]
     p_calc=stats.norm.sf(abs(z_val))*(1 if tail.startswith("one") else 2)
-    if tail.startswith("one"):
-        crit=stats.norm.ppf(1-alpha)
-    else:
-        crit=stats.norm.ppf(1-alpha/2)
+    crit=stats.norm.ppf(1-alpha) if tail.startswith("one") else stats.norm.ppf(1-alpha/2)
     p_crit=alpha
-    reject = abs(z_val) > crit if tail.startswith("two") else z_val > crit
+    reject=abs(z_val)>crit if tail.startswith("two") else z_val>crit
     decision="rejected" if reject else "failed to reject"
     st.markdown(
         f"**Interpretation details**  \n"
         f"*Calculated statistic:* z = {z_val:.2f}, *p* = {p_calc:.3f}.  \n"
         f"*Critical statistic:* z₍crit₎ = {crit:.2f}, *p* = {p_crit:.3f}.  \n"
-        f"The calculated z is {'beyond' if reject else 'within'} the critical "
-        f"value, and its *p* is {'lower' if p_calc<p_crit else 'higher'} "
-        f"than the critical *p*. Therefore, H₀ is {decision}.  \n"
+        f"Calculated z {'exceeds' if reject else 'does not exceed'} "
+        f"critical z ➔ H₀ {'' if reject else 'not '}rejected.  \n"
+        f"Calculated *p* is {'below' if p_calc<p_crit else 'above'} α ➔ "
+        f"H₀ {'' if p_calc<p_crit else 'not '}rejected.  \n"
         f"**APA‑style conclusion:** *z* = {z_val:.2f}, *p* = {p_calc:.3f} "
         f"({tail}). H₀ was **{decision}** at α = {alpha:.2f}."
     )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-#  Tab 3 • F‑Distribution
+#  TAB 3 • F‑Distribution
 # ─────────────────────────────────────────────────────────────────────────────
 def tab_f():
     st.subheader("Tab 3 • F‑Distribution")
     c1,c2=st.columns(2)
     with c1:
         f_val=st.number_input("F statistic",value=4.32,key="f_val")
-        df1=st.number_input("df₁ (numerator)",min_value=1,value=5,step=1,key="f_df1")
+        df1  =st.number_input("df₁ (numerator)",min_value=1,value=5,step=1,key="f_df1")
     with c2:
-        df2=st.number_input("df₂ (denominator)",min_value=1,value=20,step=1,key="f_df2")
-        alpha=st.number_input("α",value=0.05,step=0.01,min_value=0.0001,max_value=0.5,key="f_alpha")
+        df2  =st.number_input("df₂ (denominator)",min_value=1,value=20,step=1,key="f_df2")
+        alpha=st.number_input("α",value=0.05,step=0.01,
+                              min_value=0.0001,max_value=0.5,key="f_alpha")
     if st.button("Update Plot",key="f_plot"):
         st.pyplot(plot_f(f_val,df1,df2,alpha))
     with st.expander("Step‑by‑step F‑table"):
@@ -335,7 +339,7 @@ def f_table(df1,df2,alpha,key,f_val):
     for r in rows:
         body+=f'<tr><td id="f_{r}_0">{r}</td>'
         for i,c in enumerate(cols,start=1):
-            body+=f'<td id="f_{r}_{i}">{f_crit(r,c,alpha):.3f}</td>'
+            body+=f'<td id="f_{r}_{i}">{f_crit(r,c,alpha):.2f}</td>'
         body+="</tr>"
     css=("table{border-collapse:collapse}"
          "th,td{border:1px solid #000;width:90px;height:30px;"
@@ -366,24 +370,22 @@ def f_table(df1,df2,alpha,key,f_val):
         f"**Interpretation details**  \n"
         f"*Calculated statistic:* F({df1}, {df2}) = {f_val:.2f}, *p* = {p_calc:.3f}.  \n"
         f"*Critical statistic:* F₍crit₎ = {crit:.2f}, *p* = {p_crit:.3f}.  \n"
-        f"Since the calculated F is {'greater' if reject else 'not greater'} "
-        f"than the critical F and the *p* is "
-        f"{'lower' if p_calc<p_crit else 'higher'} than α, H₀ is "
-        f"{decision}.  \n"
+        f"Calculated F {'exceeds' if reject else 'does not exceed'} critical F; "
+        f"*p* is {'below' if p_calc<p_crit else 'above'} α → H₀ {decision}.  \n"
         f"**APA‑style conclusion:** *F*({df1}, {df2}) = {f_val:.2f}, "
         f"*p* = {p_calc:.3f}. H₀ was **{decision}** at α = {alpha:.2f}."
     )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-#  Tab 4 • Chi‑Square
+#  TAB 4 • Chi‑Square
 # ─────────────────────────────────────────────────────────────────────────────
 def tab_chi():
     st.subheader("Tab 4 • Chi‑Square (χ²)")
     c1,c2=st.columns(2)
     with c1:
         chi_val=st.number_input("χ² statistic",value=7.88,key="chi_val")
-        df=st.number_input("df",min_value=1,value=3,step=1,key="chi_df")
+        df     =st.number_input("df",min_value=1,value=3,step=1,key="chi_df")
     with c2:
         alpha=st.selectbox("α",[0.10,0.05,0.01,0.001],index=1,key="chi_alpha")
     if st.button("Update Plot",key="chi_plot"):
@@ -406,7 +408,7 @@ def chi_table(df,alpha,key,chi_val):
     for r in rows:
         body+=f'<tr><td id="chi_{r}_0">{r}</td>'
         for i,a in enumerate(alphas,start=1):
-            body+=f'<td id="chi_{r}_{i}">{chi_crit(r,a):.3f}</td>'
+            body+=f'<td id="chi_{r}_{i}">{chi_crit(r,a):.2f}</td>'
         body+="</tr>"
     css=("table{border-collapse:collapse}"
          "th,td{border:1px solid #000;width:80px;height:30px;"
@@ -437,17 +439,15 @@ def chi_table(df,alpha,key,chi_val):
         f"**Interpretation details**  \n"
         f"*Calculated statistic:* χ²({df}) = {chi_val:.2f}, *p* = {p_calc:.3f}.  \n"
         f"*Critical statistic:* χ²₍crit₎ = {crit:.2f}, *p* = {p_crit:.3f}.  \n"
-        f"The calculated χ² is {'greater' if reject else 'not greater'} than "
-        f"the critical value and the *p* is "
-        f"{'lower' if p_calc<p_crit else 'higher'} than α, so H₀ is "
-        f"{decision}.  \n"
+        f"Calculated χ² {'exceeds' if reject else 'does not exceed'} critical χ²; "
+        f"*p* is {'below' if p_calc<p_crit else 'above'} α → H₀ {decision}.  \n"
         f"**APA‑style conclusion:** χ²({df}) = {chi_val:.2f}, "
         f"*p* = {p_calc:.3f}. H₀ was **{decision}** at α = {alpha:.3f}."
     )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-#  Tab 5 • Mann‑Whitney U
+#  TAB 5 • Mann‑Whitney U
 # ─────────────────────────────────────────────────────────────────────────────
 def tab_u():
     st.subheader("Tab 5 • Mann–Whitney U")
@@ -457,7 +457,8 @@ def tab_u():
         n1=st.number_input("n₁",min_value=2,value=10,step=1,key="u_n1")
     with c2:
         n2=st.number_input("n₂",min_value=2,value=12,step=1,key="u_n2")
-        alpha=st.number_input("α",value=0.05,step=0.01,min_value=0.0001,max_value=0.5,key="u_alpha")
+        alpha=st.number_input("α",value=0.05,step=0.01,
+                              min_value=0.0001,max_value=0.5,key="u_alpha")
         tail=st.radio("Tail",["one‑tailed","two‑tailed"],key="u_tail")
     if st.button("Update Plot",key="u_plot"):
         st.pyplot(plot_u(u_val,n1,n2,alpha,tail))
@@ -522,17 +523,15 @@ def u_table(n1,n2,alpha,tail,key,u_val):
         f"**Interpretation details**  \n"
         f"*Calculated statistic:* U = {u_val}, *p* = {p_calc:.3f}.  \n"
         f"*Critical statistic:* U₍crit₎ = {crit}, *p* = {p_crit:.3f}.  \n"
-        f"H₀ is {decision} because the calculated U is "
-        f"{'beyond' if reject else 'not beyond'} the critical U and "
-        f"its *p* is {'lower' if p_calc<p_crit else 'higher'} than "
-        f"the critical *p*.  \n"
+        f"Calculated U is {'beyond' if reject else 'not beyond'} critical U; "
+        f"*p* is {'below' if p_calc<p_crit else 'above'} α → H₀ {decision}.  \n"
         f"**APA‑style conclusion:** *U* = {u_val}, *p* = {p_calc:.3f} "
         f"({tail_txt}). H₀ was **{decision}** at α = {alpha:.2f}."
     )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-#  Tab 6 • Wilcoxon Signed‑Rank T
+#  TAB 6 • Wilcoxon Signed‑Rank T
 # ─────────────────────────────────────────────────────────────────────────────
 def tab_w():
     st.subheader("Tab 6 • Wilcoxon Signed‑Rank T")
@@ -541,7 +540,8 @@ def tab_w():
         t_val=st.number_input("T statistic",value=15,key="w_val")
         n=st.number_input("N (non‑zero diffs)",min_value=5,value=12,step=1,key="w_n")
     with c2:
-        alpha=st.number_input("α",value=0.05,step=0.01,min_value=0.0001,max_value=0.5,key="w_alpha")
+        alpha=st.number_input("α",value=0.05,step=0.01,
+                              min_value=0.0001,max_value=0.5,key="w_alpha")
         tail=st.radio("Tail",["one‑tailed","two‑tailed"],key="w_tail")
     if st.button("Update Plot",key="w_plot"):
         st.pyplot(plot_w(t_val,n,alpha,tail))
@@ -606,17 +606,15 @@ def w_table(n,alpha,tail,key,t_val):
         f"**Interpretation details**  \n"
         f"*Calculated statistic:* T = {t_val}, *p* = {p_calc:.3f}.  \n"
         f"*Critical statistic:* T₍crit₎ = {crit}, *p* = {p_crit:.3f}.  \n"
-        f"H₀ is {decision} because the calculated T is "
-        f"{'beyond' if reject else 'not beyond'} the critical T and "
-        f"its *p* is {'lower' if p_calc<p_crit else 'higher'} than the "
-        f"critical *p*.  \n"
+        f"Calculated T is {'beyond' if reject else 'not beyond'} critical T; "
+        f"*p* is {'below' if p_calc<p_crit else 'above'} α → H₀ {decision}.  \n"
         f"**APA‑style conclusion:** *T* = {t_val}, *p* = {p_calc:.3f} "
         f"({tail_txt}). H₀ was **{decision}** at α = {alpha:.2f}."
     )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-#  Tab 7 • Binomial
+#  TAB 7 • Binomial
 # ─────────────────────────────────────────────────────────────────────────────
 def tab_binom():
     st.subheader("Tab 7 • Binomial")
@@ -636,22 +634,17 @@ def tab_binom():
 
 
 def critical_binom(n,p,alpha):
-    """Return lower & upper critical cut‑offs (inclusive)."""
-    cum=0
-    k_low=None
+    cum=0; k_low=None
     for k in range(n+1):
         cum+=stats.binom.pmf(k,n,p)
         if cum>=alpha/2:
-            k_low=k
-            break
-    cum=0
-    k_high=None
+            k_low=k; break
+    cum=0; k_hi=None
     for k in range(n,-1,-1):
         cum+=stats.binom.pmf(k,n,p)
         if cum>=alpha/2:
-            k_high=k
-            break
-    return k_low,k_high
+            k_hi=k; break
+    return k_low,k_hi
 
 
 def binom_table(k,n,p,key,alpha):
@@ -694,17 +687,17 @@ def binom_table(k,n,p,key,alpha):
     st.markdown(
         f"**Interpretation details**  \n"
         f"*Calculated statistic:* k = {k}, *p* = {p_calc:.3f}.  \n"
-        f"*Critical region:* k ≤ {k_lo} or k ≥ {k_hi} (total *p* = {p_crit:.3f}).  \n"
-        f"The observed k is {'inside' if reject else 'outside'} the rejection "
-        f"region, and its *p* is {'lower' if p_calc<p_crit else 'higher'} "
-        f"than α, so H₀ is {decision}.  \n"
+        f"*Critical region:* k ≤ {k_lo} or k ≥ {k_hi} "
+        f"(total *p* = {p_crit:.3f}).  \n"
+        f"Observed k is {'inside' if reject else 'outside'} rejection region; "
+        f"*p* is {'below' if p_calc<p_crit else 'above'} α → H₀ {decision}.  \n"
         f"**APA‑style conclusion:** Exact binomial test, "
         f"*p* = {p_calc:.3f}. H₀ was **{decision}** at α = {alpha:.2f}."
     )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-#  Main
+#  MAIN
 # ─────────────────────────────────────────────────────────────────────────────
 def main():
     st.set_page_config("PSYC250 – Statistical Tables Explorer",layout="wide")
