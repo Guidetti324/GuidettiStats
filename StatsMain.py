@@ -8,13 +8,13 @@ from scipy import stats
 plt.switch_backend("Agg")
 
 ###############################################################################
-#                                HELPER UTILS
+#                        HELPER FUNCTIONS
 ###############################################################################
 
 def place_label(ax, label_positions, x, y, text, color='blue'):
     """
-    Places a text label on the Axes at (x, y), shifting if needed
-    to avoid overlapping previously placed labels.
+    Place a text label at (x, y), shifting if needed to avoid overlap with
+    previously placed labels in label_positions.
     """
     offset_x = 0.0
     offset_y = 0.02
@@ -27,17 +27,17 @@ def place_label(ax, label_positions, x, y, text, color='blue'):
     ax.text(final_x, final_y, text, color=color, ha="left", va="bottom", fontsize=8)
     label_positions.append((final_x, final_y))
 
-def highlight_html_cell(html_in, cell_id, color="red", border_px=2):
+def highlight_html_cell(html_str, cell_id, color="red", border_px=2):
     """
-    Finds <td id="cell_id"> in html_in and adds inline style for a colored border.
+    Finds <td id="cell_id"> in html_str and adds an inline style for a colored border.
     """
     needle = f'id="{cell_id}"'
-    styled = f'id="{cell_id}" style="border:{border_px}px solid {color};"'
-    return html_in.replace(needle, styled, 1)
+    replacement = f'id="{cell_id}" style="border:{border_px}px solid {color};"'
+    return html_str.replace(needle, replacement, 1)
 
 def show_html_table(html_content, height=400):
     """
-    Renders an HTML table in a scrollable iframe.
+    Renders the given HTML in a scrollable iframe so the table layout is preserved.
     """
     wrapped = f"""
     <html>
@@ -54,11 +54,11 @@ def next_step_button(step_key):
     Displays a 'Next Step' button that increments st.session_state[step_key].
     """
     if st.button("Next Step", key=step_key+"_btn"):
-        st.session_state[step_key]+=1
+        st.session_state[step_key] += 1
 
 
 ###############################################################################
-#                    1) T-DISTRIBUTION TAB
+#                        1) T-DISTRIBUTION TAB
 ###############################################################################
 
 def show_t_distribution_tab():
@@ -74,7 +74,7 @@ def show_t_distribution_tab():
 
     if st.button("Update Plot (Tab1)", key="tab1_update"):
         fig = plot_t_distribution(t_val, df_val, alpha_val, tail_s)
-        st.pyplot(fig)  # 12×4 fixed
+        st.pyplot(fig)
 
     with st.expander("Show Table Lookup (±5 around df) (Tab1)"):
         show_t_table_lookup(df_val, alpha_val, tail_s, "tab1")
@@ -89,32 +89,32 @@ def plot_t_distribution(t_val, df, alpha, tail_s):
     ax.plot(x, y, color='black')
     ax.fill_between(x, y, color='lightgrey', alpha=0.2, label="Fail to Reject H₀")
 
-    if tail_s=="one-tailed":
-        t_crit= stats.t.ppf(1 - alpha, df)
-        ax.fill_between(x[x>=t_crit], y[x>=t_crit], color='red', alpha=0.3, label="Reject H₀")
+    if tail_s == "one-tailed":
+        t_crit = stats.t.ppf(1 - alpha, df)
+        ax.fill_between(x[x>= t_crit], y[x>= t_crit], color='red', alpha=0.3, label="Reject H₀")
         ax.axvline(t_crit, color='green', linestyle='--')
         place_label(ax, label_positions, t_crit, stats.t.pdf(t_crit,df)+0.02, f"t_crit={t_crit:.3f}", 'green')
-        sig = (t_val> t_crit)
-        final_crit= t_crit
+        sig = (t_val > t_crit)
+        final_crit = t_crit
     else:
-        t_crit_r= stats.t.ppf(1 - alpha/2, df)
-        t_crit_l= stats.t.ppf(alpha/2, df)
-        ax.fill_between(x[x>=t_crit_r], y[x>=t_crit_r], color='red', alpha=0.3)
-        ax.fill_between(x[x<=t_crit_l], y[x<=t_crit_l], color='red', alpha=0.3, label="Reject H₀")
+        t_crit_r = stats.t.ppf(1 - alpha/2, df)
+        t_crit_l = stats.t.ppf(alpha/2, df)
+        ax.fill_between(x[x>= t_crit_r], y[x>= t_crit_r], color='red', alpha=0.3)
+        ax.fill_between(x[x<= t_crit_l], y[x<= t_crit_l], color='red', alpha=0.3, label="Reject H₀")
         ax.axvline(t_crit_r, color='green', linestyle='--')
         ax.axvline(t_crit_l, color='green', linestyle='--')
-        place_label(ax, label_positions, t_crit_r, stats.t.pdf(t_crit_r,df)+0.02, f"+t_crit={t_crit_r:.3f}", 'green')
-        place_label(ax, label_positions, t_crit_l, stats.t.pdf(t_crit_l,df)+0.02, f"-t_crit={t_crit_l:.3f}", 'green')
-        sig = (abs(t_val)> abs(t_crit_r))
-        final_crit= abs(t_crit_r)
+        place_label(ax, label_positions, t_crit_r, stats.t.pdf(t_crit_r, df)+0.02, f"+t_crit={t_crit_r:.3f}", 'green')
+        place_label(ax, label_positions, t_crit_l, stats.t.pdf(t_crit_l, df)+0.02, f"-t_crit={t_crit_l:.3f}", 'green')
+        sig = (abs(t_val) > abs(t_crit_r))
+        final_crit = abs(t_crit_r)
 
     ax.axvline(t_val, color='blue', linestyle='--')
     place_label(ax, label_positions, t_val, stats.t.pdf(t_val, df)+0.02, f"t_calc={t_val:.3f}", 'blue')
 
     if sig:
-        msg= f"t={t_val:.3f} > {final_crit:.3f} => Reject H₀"
+        msg = f"t={t_val:.3f} > {final_crit:.3f} => Reject H₀"
     else:
-        msg= f"t={t_val:.3f} ≤ {final_crit:.3f} => Fail to Reject H₀"
+        msg = f"t={t_val:.3f} ≤ {final_crit:.3f} => Fail to Reject H₀"
 
     ax.set_title(f"t-Distribution (df={df})\n{msg}")
     ax.legend()
@@ -125,37 +125,37 @@ def plot_t_distribution(t_val, df, alpha, tail_s):
 def show_t_table_lookup(df_val, alpha_val, tail_s, key_prefix):
     st.write("### Step-by-Step T-Table Lookup")
 
-    step_key= key_prefix+"_table_step"
+    step_key = key_prefix + "_table_step"
     if step_key not in st.session_state:
-        st.session_state[step_key]=0
-    cur_step= st.session_state[step_key]
+        st.session_state[step_key] = 0
+    cur_step = st.session_state[step_key]
 
-    df_min= max(1, df_val-5)
-    df_max= df_val+5
-    df_list= list(range(df_min, df_max+1))
+    df_min = max(1, df_val - 5)
+    df_max = df_val + 5
+    df_list = list(range(df_min, df_max+1))
 
-    columns= [
+    columns = [
         ("df",""),
         ("one",0.10), ("one",0.05), ("one",0.01), ("one",0.001),
         ("two",0.10), ("two",0.05), ("two",0.01), ("two",0.001),
     ]
 
     def compute_tcrit(dof, mode, a_):
-        if mode=="one":
+        if mode == "one":
             return stats.t.ppf(1 - a_, dof)
         else:
             return stats.t.ppf(1 - a_/2, dof)
 
-    table_html= """
+    table_html = """
     <style>
     table.ttable {
       border-collapse: collapse;
       margin-top:10px;
     }
     table.ttable td, table.ttable th {
-      border:1px solid #000; 
-      width:80px; 
-      height:30px; 
+      border:1px solid #000;
+      width:80px;
+      height:30px;
       text-align:center;
       font-family:sans-serif;
       font-size:0.9rem;
@@ -168,64 +168,65 @@ def show_t_table_lookup(df_val, alpha_val, tail_s, key_prefix):
       <tr>
         <th>df</th>
     """
-    for i,(m,a) in enumerate(columns[1:],start=1):
-        table_html+= f"<th>{m}_{a}</th>"
-    table_html+= "</tr>\n"
+    for i,(m,a) in enumerate(columns[1:], start=1):
+        table_html += f"<th>{m}_{a}</th>"
+    table_html += "</tr>\n"
 
     for dfv in df_list:
-        table_html+= "<tr>"
-        row_id= f"df_{dfv}_0"
-        table_html+= f'<td id="{row_id}">{dfv}</td>'
-        for c_i,(m,a) in enumerate(columns[1:],start=1):
-            cell_id= f"df_{dfv}_{c_i}"
-            val= compute_tcrit(dfv,m,a)
-            table_html+= f'<td id="{cell_id}">{val:.3f}</td>'
-        table_html+= "</tr>\n"
-    table_html+="</table>"
+        table_html += "<tr>"
+        row_id = f"df_{dfv}_0"
+        table_html += f'<td id="{row_id}">{dfv}</td>'
+        for c_i,(m,a) in enumerate(columns[1:], start=1):
+            cell_id = f"df_{dfv}_{c_i}"
+            val = compute_tcrit(dfv, m, a)
+            table_html += f'<td id="{cell_id}">{val:.3f}</td>'
+        table_html += "</tr>\n"
+    table_html += "</table>"
 
-    user_mode= "one" if tail_s.startswith("one") else "two"
-    col_index=None
-    for i,(m,a) in enumerate(columns[1:],start=1):
-        if m==user_mode and abs(a-alpha_val)<1e-12:
-            col_index= i
+    user_mode = "one" if tail_s.startswith("one") else "two"
+    col_index = None
+    for i,(m,a) in enumerate(columns[1:], start=1):
+        if m==user_mode and abs(a - alpha_val)<1e-12:
+            col_index = i
             break
 
-    row_in= (df_val in df_list)
+    row_in = (df_val in df_list)
 
-    # steps
+    # Steps: 0 => highlight row, 1 => highlight column, 2 => intersection, 3 => if alpha=0.05 (one-tail) highlight two_0.10
     if cur_step>=0 and row_in:
         for cc in range(len(columns)):
-            table_html= highlight_html_cell(table_html,f"df_{df_val}_{cc}","red",2)
+            table_html = highlight_html_cell(table_html, f"df_{df_val}_{cc}", "red", 2)
     if cur_step>=1 and col_index is not None:
         for dv_ in df_list:
-            table_html= highlight_html_cell(table_html,f"df_{dv_}_{col_index}","red",2)
+            table_html = highlight_html_cell(table_html, f"df_{dv_}_{col_index}", "red", 2)
     if cur_step>=2 and row_in and col_index is not None:
-        table_html= highlight_html_cell(table_html,f"df_{df_val}_{col_index}","blue",3)
+        table_html = highlight_html_cell(table_html, f"df_{df_val}_{col_index}", "blue", 3)
 
-    # step3 => if one-tail=0.05 => highlight two_0.10
+    # Step 3 => if one-tailed alpha=0.05 => highlight two_0.10
     if cur_step>=3 and tail_s=="one-tailed" and abs(alpha_val-0.05)<1e-12:
         alt_col=None
-        for i,(mm,aa) in enumerate(columns[1:],start=1):
+        for i,(mm,aa) in enumerate(columns[1:], start=1):
             if mm=="two" and abs(aa-0.10)<1e-12:
-                alt_col= i
+                alt_col = i
                 break
         if alt_col is not None and row_in:
             for dv_ in df_list:
-                table_html= highlight_html_cell(table_html,f"df_{dv_}_{alt_col}","red",2)
-            table_html= highlight_html_cell(table_html,f"df_{df_val}_{alt_col}","blue",3)
+                table_html = highlight_html_cell(table_html, f"df_{dv_}_{alt_col}", "red", 2)
+            table_html = highlight_html_cell(table_html, f"df_{df_val}_{alt_col}", "blue", 3)
 
-    show_html_table(table_html,height=450)
+    show_html_table(table_html, height=450)
 
-    steps_list= [
+    steps_list = [
         f"1) Highlight row df={df_val}",
         f"2) Highlight column tail={tail_s}, α={alpha_val}",
         "3) Intersection => t_crit",
-        "4) If one-tailed α=0.05, also highlight two_0.10"
+        "4) If one-tailed α=0.05, also highlight two-tailed α=0.10"
     ]
-    if not(tail_s=="one-tailed" and abs(alpha_val-0.05)<1e-12):
+    if not (tail_s=="one-tailed" and abs(alpha_val-0.05)<1e-12):
         steps_list.pop()
-    max_step=len(steps_list)-1
-    if cur_step>max_step:
+
+    max_step = len(steps_list)-1
+    if cur_step> max_step:
         st.write("All steps complete!")
     else:
         st.write(f"**Step {cur_step+1}**: {steps_list[cur_step]}")
@@ -233,25 +234,25 @@ def show_t_table_lookup(df_val, alpha_val, tail_s, key_prefix):
 
 
 ###############################################################################
-#                 2) Z-DISTRIBUTION TAB
+#                      2) Z-DISTRIBUTION TAB
 ###############################################################################
 
 def show_z_distribution_tab():
     st.subheader("Tab 2: z-Distribution")
 
-    col1,col2= st.columns(2)
-    with col1:
-        z_val= st.number_input("z statistic (Tab2)", value=1.64, key="tab2_zval")
-    with col2:
-        alpha_val= st.number_input("Alpha (Tab2)", value=0.05, step=0.01, key="tab2_alpha")
-        tail_s= st.radio("Tail Type (Tab2)", ["one-tailed","two-tailed"], key="tab2_tail")
+    c1, c2 = st.columns(2)
+    with c1:
+        z_val = st.number_input("z statistic (Tab2)", value=1.64, key="tab2_zval")
+    with c2:
+        alpha_val = st.number_input("Alpha (Tab2)", value=0.05, step=0.01, key="tab2_alpha")
+        tail_s    = st.radio("Tail Type (Tab2)", ["one-tailed","two-tailed"], key="tab2_tail")
 
     if st.button("Update Plot (Tab2)", key="tab2_update"):
         fig= plot_z_distribution(z_val, alpha_val, tail_s)
         st.pyplot(fig)
 
     with st.expander("Show z-Table Lookup (±10 rows) (Tab2)"):
-        show_z_table_lookup(z_val,"tab2")
+        show_z_table_lookup(z_val, "tab2")
 
 
 def plot_z_distribution(z_val, alpha, tail_s):
@@ -260,7 +261,7 @@ def plot_z_distribution(z_val, alpha, tail_s):
     x= np.linspace(-4,4,400)
     y= stats.norm.pdf(x)
     ax.plot(x,y,color='black')
-    ax.fill_between(x,y,color='lightgrey', alpha=0.2, label="Fail to Reject H₀")
+    ax.fill_between(x,y,color='lightgrey', alpha=0.2,label="Fail to Reject H₀")
 
     if tail_s=="one-tailed":
         z_crit= stats.norm.ppf(1- alpha)
@@ -268,35 +269,36 @@ def plot_z_distribution(z_val, alpha, tail_s):
         ax.axvline(z_crit, color='green', linestyle='--')
         place_label(ax, label_positions, z_crit, stats.norm.pdf(z_crit), f"z_crit={z_crit:.3f}", 'green')
         sig= (z_val> z_crit)
-        final_crit= z_crit
     else:
         z_crit_r= stats.norm.ppf(1- alpha/2)
         z_crit_l= -z_crit_r
-        ax.fill_between(x[x>=z_crit_r], y[x>=z_crit_r], color='red', alpha=0.3)
-        ax.fill_between(x[x<=z_crit_l], y[x<=z_crit_l], color='red', alpha=0.3, label="Reject H₀")
+        ax.fill_between(x[x>= z_crit_r], y[x>=z_crit_r], color='red', alpha=0.3)
+        ax.fill_between(x[x<= z_crit_l], y[x<=z_crit_l], color='red', alpha=0.3, label="Reject H₀")
         ax.axvline(z_crit_r, color='green', linestyle='--')
         ax.axvline(z_crit_l, color='green', linestyle='--')
         place_label(ax, label_positions, z_crit_r, stats.norm.pdf(z_crit_r), f"+z_crit={z_crit_r:.3f}", 'green')
         place_label(ax, label_positions, z_crit_l, stats.norm.pdf(z_crit_l), f"-z_crit={z_crit_r:.3f}", 'green')
         sig= (abs(z_val)> z_crit_r)
-        final_crit= z_crit_r
 
     ax.axvline(z_val, color='blue', linestyle='--')
     place_label(ax, label_positions, z_val, stats.norm.pdf(z_val), f"z_calc={z_val:.3f}", 'blue')
 
+    final_crit= abs(z_crit_r) if tail_s=="two-tailed" else z_crit
     if sig:
         msg= f"z={z_val:.3f} > {final_crit:.3f} => Reject H₀"
     else:
         msg= f"z={z_val:.3f} ≤ {final_crit:.3f} => Fail to Reject H₀"
+
     ax.set_title(f"Z-Distribution\n{msg}")
     ax.legend()
     fig.tight_layout()
     return fig
 
-def show_z_table_lookup(z_in, key_prefix):
-    st.write("### Step-by-Step z-Table Lookup (CDF style)")
 
-    step_key= key_prefix+"_table_step"
+def show_z_table_lookup(z_in, key_prefix):
+    st.write("### Step-by-Step z-Table Lookup")
+
+    step_key= key_prefix + "_table_step"
     if step_key not in st.session_state:
         st.session_state[step_key]=0
     cur_step= st.session_state[step_key]
@@ -312,11 +314,12 @@ def show_z_table_lookup(z_in, key_prefix):
         row_base= min(row_vals, key=lambda x: abs(x-row_base))
 
     row_idx= np.where(row_vals==row_base)[0]
-    if len(row_idx)==0: row_idx=[0]
+    if len(row_idx)==0:
+        row_idx=[0]
     row_idx= row_idx[0]
 
-    row_start= max(0,row_idx-10)
-    row_end= min(len(row_vals)-1,row_idx+10)
+    row_start= max(0, row_idx-10)
+    row_end= min(len(row_vals)-1, row_idx+10)
     sub_rows= row_vals[row_start: row_end+1]
 
     col_vals= np.round(np.arange(0,0.1,0.01),2)
@@ -329,7 +332,7 @@ def show_z_table_lookup(z_in, key_prefix):
       border-collapse: collapse;
       margin-top:10px;
     }
-    table.ztable td, table.ztable th {
+    table.ztable td,table.ztable th {
       border:1px solid #000; width:70px; height:30px;
       text-align:center; font-family:sans-serif; font-size:0.9rem;
     }
@@ -343,7 +346,7 @@ def show_z_table_lookup(z_in, key_prefix):
     table_html+="</tr>\n"
 
     for rv in sub_rows:
-        table_html+= "<tr>"
+        table_html+="<tr>"
         row_id= f"z_{rv:.1f}_0"
         table_html+= f'<td id="{row_id}">{rv:.1f}</td>'
         for cv in col_vals:
@@ -356,17 +359,18 @@ def show_z_table_lookup(z_in, key_prefix):
 
     row_in= (row_base in sub_rows)
     col_in= (col_part in col_vals)
+
     if cur_step>=0 and row_in:
         for cv in col_vals:
             table_html= highlight_html_cell(table_html, f"z_{row_base:.1f}_{cv:.2f}","red",2)
-        table_html= highlight_html_cell(table_html,f"z_{row_base:.1f}_0","red",2)
+        table_html= highlight_html_cell(table_html, f"z_{row_base:.1f}_0","red",2)
     if cur_step>=1 and col_in:
         for rv_ in sub_rows:
-            table_html= highlight_html_cell(table_html,f"z_{rv_:.1f}_{col_part:.2f}","red",2)
+            table_html= highlight_html_cell(table_html, f"z_{rv_:.1f}_{col_part:.2f}","red",2)
     if cur_step>=2 and row_in and col_in:
-        table_html= highlight_html_cell(table_html,f"z_{row_base:.1f}_{col_part:.2f}","blue",3)
+        table_html= highlight_html_cell(table_html, f"z_{row_base:.1f}_{col_part:.2f}","blue",3)
 
-    show_html_table(table_html,height=450)
+    show_html_table(table_html, height=450)
 
     steps_list= [
         f"1) Locate row {row_base:.1f}",
@@ -380,19 +384,18 @@ def show_z_table_lookup(z_in, key_prefix):
         st.write(f"**Step {cur_step+1}**: {steps_list[cur_step]}")
     next_step_button(step_key)
 
-
 ###############################################################################
-#                   3) F-DISTRIBUTION TAB
+#                    3) F-DISTRIBUTION TAB
 ###############################################################################
 
 def show_f_distribution_tab():
     st.subheader("Tab 3: F-Distribution (One-tailed)")
 
-    c1,c2= st.columns(2)
+    c1, c2 = st.columns(2)
     with c1:
         f_val= st.number_input("F statistic (Tab3)", value=3.49, key="tab3_fval")
-        df1= st.number_input("df1 (Tab3)", value=3, key="tab3_df1")
-        df2= st.number_input("df2 (Tab3)", value=12, key="tab3_df2")
+        df1  = st.number_input("df1 (Tab3)", value=3, key="tab3_df1")
+        df2  = st.number_input("df2 (Tab3)", value=12, key="tab3_df2")
     with c2:
         alpha= st.number_input("Alpha (Tab3)", value=0.05, step=0.01, key="tab3_alpha")
 
@@ -403,7 +406,6 @@ def show_f_distribution_tab():
     with st.expander("Show F Table Lookup (±5 around df1, df2) (Tab3)"):
         show_f_table_lookup(df1, df2, alpha, "tab3")
 
-
 def plot_f_distribution(f_val, df1, df2, alpha):
     fig, ax= plt.subplots(figsize=(12,4), dpi=100)
     label_positions=[]
@@ -413,12 +415,14 @@ def plot_f_distribution(f_val, df1, df2, alpha):
     ax.fill_between(x,y,color='lightgrey', alpha=0.2, label="Fail to Reject H₀")
 
     f_crit= stats.f.ppf(1-alpha, df1, df2)
-    ax.fill_between(x[x>= f_crit], y[x>= f_crit], color='red', alpha=0.3, label="Reject H₀")
+    ax.fill_between(x[x>=f_crit], y[x>=f_crit], color='red', alpha=0.3, label="Reject H₀")
     ax.axvline(f_crit, color='green', linestyle='--')
-    place_label(ax, label_positions, f_crit, stats.f.pdf(f_crit,df1,df2)+0.02, f"F_crit={f_crit:.3f}", 'green')
+    place_label(ax, label_positions, f_crit, stats.f.pdf(f_crit,df1,df2)+0.02,
+                f"F_crit={f_crit:.3f}", 'green')
 
     ax.axvline(f_val, color='blue', linestyle='--')
-    place_label(ax, label_positions, f_val, stats.f.pdf(f_val,df1,df2)+0.02, f"F_calc={f_val:.3f}", 'blue')
+    place_label(ax, label_positions, f_val, stats.f.pdf(f_val,df1,df2)+0.02,
+                f"F_calc={f_val:.3f}", 'blue')
 
     sig= (f_val> f_crit)
     msg= (f"F={f_val:.3f} > {f_crit:.3f} => Reject H₀" if sig else
@@ -428,7 +432,6 @@ def plot_f_distribution(f_val, df1, df2, alpha):
     ax.legend()
     fig.tight_layout()
     return fig
-
 
 def show_f_table_lookup(df1_u, df2_u, alpha, key_prefix):
     st.write("### Step-by-Step F Table Lookup")
@@ -475,19 +478,22 @@ def show_f_table_lookup(df1_u, df2_u, alpha, key_prefix):
             val= fcrit(d1,d2,alpha)
             table_html+= f'<td id="{cell_id}">{val:.3f}</td>'
         table_html+= "</tr>\n"
-    table_html+="</table>"
+    table_html+= "</table>"
 
     row_in= (df1_u in df1_list)
     col_in= (df2_u in df2_list)
+
     if cur_step>=0 and row_in:
         for dd2 in df2_list:
-            table_html= highlight_html_cell(table_html,f"f_{df1_u}_{dd2}","red",2)
-        table_html= highlight_html_cell(table_html,f"f_{df1_u}_0","red",2)
+            table_html= highlight_html_cell(table_html, f"f_{df1_u}_{dd2}","red",2)
+        table_html= highlight_html_cell(table_html, f"f_{df1_u}_0","red",2)
+
     if cur_step>=1 and col_in:
         for dd1 in df1_list:
-            table_html= highlight_html_cell(table_html,f"f_{dd1}_{df2_u}","red",2)
+            table_html= highlight_html_cell(table_html, f"f_{dd1}_{df2_u}","red",2)
+
     if cur_step>=2 and row_in and col_in:
-        table_html= highlight_html_cell(table_html,f"f_{df1_u}_{df2_u}","blue",3)
+        table_html= highlight_html_cell(table_html, f"f_{df1_u}_{df2_u}","blue",3)
 
     show_html_table(table_html,height=450)
 
@@ -505,13 +511,13 @@ def show_f_table_lookup(df1_u, df2_u, alpha, key_prefix):
 
 
 ###############################################################################
-#               4) CHI-SQUARE TAB
+#                    4) CHI-SQUARE TAB
 ###############################################################################
 
 def show_chi_square_tab():
     st.subheader("Tab 4: Chi-Square (One-tailed)")
 
-    c1,c2= st.columns(2)
+    c1, c2= st.columns(2)
     with c1:
         chi_val= st.number_input("Chi-square stat (Tab4)", value=10.5, key="tab4_chi")
         df_val= st.number_input("df (Tab4)", value=12, key="tab4_chi_df")
@@ -533,7 +539,7 @@ def plot_chi_square(chi_val, df, alpha):
     x= np.linspace(0,x_max,400)
     y= stats.chi2.pdf(x, df)
     ax.plot(x,y,color='black')
-    ax.fill_between(x,y,color='lightgrey', alpha=0.2, label="Fail to Reject H₀")
+    ax.fill_between(x,y,color='lightgrey', alpha=0.2,label="Fail to Reject H₀")
 
     chi_crit= stats.chi2.ppf(1-alpha, df)
     ax.fill_between(x[x>= chi_crit], y[x>= chi_crit], color='red', alpha=0.3, label="Reject H₀")
@@ -549,6 +555,7 @@ def plot_chi_square(chi_val, df, alpha):
     msg= (f"χ²={chi_val:.3f} > {chi_crit:.3f} => Reject H₀"
           if sig else
           f"χ²={chi_val:.3f} ≤ {chi_crit:.3f} => Fail to Reject H₀")
+
     ax.set_title(f"Chi-Square (df={df})\n{msg}")
     ax.legend()
     fig.tight_layout()
@@ -565,26 +572,33 @@ def show_chi_table_lookup(df_val, alpha, key_prefix):
 
     df_min= max(1, df_val-5)
     df_max= df_val+5
-    df_list= list(range(df_min,df_max+1))
+    df_list= list(range(df_min, df_max+1))
     alpha_list= [0.10,0.05,0.01,0.001]
 
     table_html= """
     <style>
     table.chitable {
-      border-collapse: collapse; margin-top:10px;
+      border-collapse: collapse; 
+      margin-top:10px;
     }
     table.chitable td, table.chitable th {
-      border:1px solid #000; width:80px; height:30px; text-align:center;
-      font-family:sans-serif; font-size:0.9rem;
+      border:1px solid #000; 
+      width:80px; 
+      height:30px; 
+      text-align:center;
+      font-family:sans-serif; 
+      font-size:0.9rem;
     }
-    table.chitable th {background-color:#f0f0f0;}
+    table.chitable th {
+      background-color:#f0f0f0;
+    }
     </style>
     <table class="chitable">
     <tr><th>df</th>
     """
     for a_ in alpha_list:
         table_html+= f"<th>α={a_}</th>"
-    table_html+="</tr>\n"
+    table_html+= "</tr>\n"
 
     def chi_crit(dof,a_):
         return stats.chi2.ppf(1-a_, dof)
@@ -605,8 +619,8 @@ def show_chi_table_lookup(df_val, alpha, key_prefix):
         c_idx= alpha_list.index(alpha)+1
         col_in= True
     except:
-        c_idx=None
-        col_in=False
+        c_idx= None
+        col_in= False
 
     if cur_step>=0 and row_in:
         for cc in range(len(alpha_list)+1):
@@ -633,13 +647,13 @@ def show_chi_table_lookup(df_val, alpha, key_prefix):
 
 
 ###############################################################################
-#             5) MANN–WHITNEY U TAB
+#               5) MANN–WHITNEY U TAB
 ###############################################################################
 
 def show_mann_whitney_tab():
     st.subheader("Tab 5: Mann–Whitney U")
 
-    c1,c2= st.columns(2)
+    c1, c2= st.columns(2)
     with c1:
         U_val= st.number_input("U statistic (Tab5)", value=5, key="tab5_U")
         n1= st.number_input("n1 (Tab5)", value=5, key="tab5_n1")
@@ -668,6 +682,7 @@ def plot_mann_whitney(U_val, n1, n2, alpha, tail_s):
     ax.plot(x,y,color='black')
     ax.fill_between(x,y,color='lightgrey', alpha=0.2, label="Fail to Reject H₀")
 
+    # alpha decides zCrit
     if tail_s=="one-tailed":
         zCrit= stats.norm.ppf(1- alpha)
         ax.fill_between(x[x>=zCrit], y[x>=zCrit], color='red', alpha=0.3, label="Reject H₀")
@@ -687,8 +702,8 @@ def plot_mann_whitney(U_val, n1, n2, alpha, tail_s):
     ax.axvline(z_val, color='blue', linestyle='--')
     place_label(ax, label_positions, z_val, stats.norm.pdf(z_val), f"z_calc={z_val:.3f}", 'blue')
 
-    msg= (f"U={U_val}, z={z_val:.3f} => Reject H₀" if sig else
-          f"U={U_val}, z={z_val:.3f} => Fail to Reject H₀")
+    msg= (f"U={U_val}, z={z_val:.3f} => Reject H₀"
+          if sig else f"U={U_val}, z={z_val:.3f} => Fail to Reject H₀")
     ax.set_title(f"Mann–Whitney U: n1={n1}, n2={n2}\n{msg}")
     ax.legend()
     fig.tight_layout()
@@ -697,68 +712,73 @@ def plot_mann_whitney(U_val, n1, n2, alpha, tail_s):
 def show_mann_whitney_lookup(n1_val, n2_val, alpha, tail_s, key_prefix):
     st.write("### Step-by-Step Mann–Whitney U Table Lookup")
 
-    # This is a placeholder. We'll do ±5 around n1, n2, alpha in [0.05,0.01,0.001,...]
-    # just like F or Chi. Then highlight row => col => intersection.
-    step_key= key_prefix+"_table_step"
+    step_key= key_prefix + "_table_step"
     if step_key not in st.session_state:
         st.session_state[step_key]=0
     cur_step= st.session_state[step_key]
 
-    n1_min= max(1,n1_val-5)
+    # We'll do ±5 around n1, n2
+    n1_min= max(1, n1_val-5)
     n1_max= n1_val+5
-    n2_min= max(1,n2_val-5)
+    n1_list= range(n1_min, n1_max+1)
+
+    n2_min= max(1, n2_val-5)
     n2_max= n2_val+5
-    n1_list= range(n1_min,n1_max+1)
-    n2_list= range(n2_min,n2_max+1)
+    n2_list= range(n2_min, n2_max+1)
 
-    alpha_list= [0.10,0.05,0.01,0.001]
-
-    # We'll imagine a "U_crit" approach, just as a placeholder.
+    # We'll incorporate alpha into a "fake" U_crit formula
     def mw_crit(n1_, n2_, a_):
-        # Not a real formula, just a placeholder
-        return (n1_*n2_)/4 * a_
+        # For demonstration only
+        return (n1_*n2_)/4 * (1 + 0.5*(1-a_))
 
     table_html= """
     <style>
-    table.mwtable {border-collapse: collapse; margin-top:10px;}
-    table.mwtable td, table.mwtable th {
-      border:1px solid #000; width:80px; height:30px; text-align:center;
-      font-family:sans-serif; font-size:0.9rem;
+    table.mwtable {
+      border-collapse: collapse;
+      margin-top:10px;
     }
-    table.mwtable th {background-color:#f0f0f0;}
+    table.mwtable td, table.mwtable th {
+      border:1px solid #000; 
+      width:80px; 
+      height:30px; 
+      text-align:center;
+      font-family:sans-serif; 
+      font-size:0.9rem;
+    }
+    table.mwtable th { background-color:#f0f0f0; }
     </style>
     <table class="mwtable">
-      <tr><th>n1\\n2</th>
+    <tr><th>n1\\n2</th>
     """
     for n2_ in n2_list:
         table_html+= f"<th>{n2_}</th>"
-    table_html+= "</tr>\n"
+    table_html+="</tr>\n"
 
     for nn1 in n1_list:
-        table_html+= "<tr>"
+        table_html+="<tr>"
         row_id= f"mw_{nn1}_0"
         table_html+= f'<td id="{row_id}">{nn1}</td>'
         for nn2 in n2_list:
             cell_id= f"mw_{nn1}_{nn2}"
             val= mw_crit(nn1, nn2, alpha)
             table_html+= f'<td id="{cell_id}">{val:.2f}</td>'
-        table_html+= "</tr>\n"
-    table_html+= "</table>"
+        table_html+="</tr>\n"
+    table_html+="</table>"
 
     row_in= (n1_val in n1_list)
     col_in= (n2_val in n2_list)
 
     if cur_step>=0 and row_in:
-        for c_ in n2_list:
-            table_html= highlight_html_cell(table_html,f"mw_{n1_val}_{c_}","red",2)
-        table_html= highlight_html_cell(table_html,f"mw_{n1_val}_0","red",2)
+        for cc in n2_list:
+            table_html= highlight_html_cell(table_html, f"mw_{n1_val}_{cc}","red",2)
+        table_html= highlight_html_cell(table_html, f"mw_{n1_val}_0","red",2)
     if cur_step>=1 and col_in:
-        for r_ in n1_list:
-            table_html= highlight_html_cell(table_html,f"mw_{r_}_{n2_val}","red",2)
+        for rr in n1_list:
+            table_html= highlight_html_cell(table_html, f"mw_{rr}_{n2_val}","red",2)
     if cur_step>=2 and row_in and col_in:
-        table_html= highlight_html_cell(table_html,f"mw_{n1_val}_{n2_val}","blue",3)
+        table_html= highlight_html_cell(table_html, f"mw_{n1_val}_{n2_val}","blue",3)
 
-    show_html_table(table_html,height=450)
+    show_html_table(table_html, height=450)
 
     steps_list= [
         f"1) Highlight row n1={n1_val}",
@@ -774,7 +794,7 @@ def show_mann_whitney_lookup(n1_val, n2_val, alpha, tail_s, key_prefix):
 
 
 ###############################################################################
-#           6) WILCOXON SIGNED-RANK TAB
+#         6) WILCOXON SIGNED-RANK TAB
 ###############################################################################
 
 def show_wilcoxon_tab():
@@ -801,7 +821,7 @@ def plot_wilcoxon(T_val, N, alpha, tail_s):
     label_positions=[]
     meanT= N*(N+1)/4
     sdT= np.sqrt(N*(N+1)*(2*N+1)/24)
-    z_val= (T_val- meanT)/ sdT
+    z_val= (T_val - meanT)/ sdT
 
     x= np.linspace(-4,4,400)
     y= stats.norm.pdf(x)
@@ -827,8 +847,8 @@ def plot_wilcoxon(T_val, N, alpha, tail_s):
     ax.axvline(z_val, color='blue', linestyle='--')
     place_label(ax, label_positions, z_val, stats.norm.pdf(z_val), f"z_calc={z_val:.3f}", 'blue')
 
-    msg= (f"T={T_val}, z={z_val:.3f} => Reject H₀" if sig else
-          f"T={T_val}, z={z_val:.3f} => Fail to Reject H₀")
+    msg= (f"T={T_val}, z={z_val:.3f} => Reject H₀" if sig
+          else f"T={T_val}, z={z_val:.3f} => Fail to Reject H₀")
     ax.set_title(f"Wilcoxon (N={N})\n{msg}")
     ax.legend()
     fig.tight_layout()
@@ -837,29 +857,38 @@ def plot_wilcoxon(T_val, N, alpha, tail_s):
 def show_wilcoxon_lookup(N_val, alpha, tail_s, key_prefix):
     st.write("### Step-by-Step Wilcoxon Signed-Rank Table Lookup")
 
-    step_key= key_prefix+"_table_step"
+    step_key= key_prefix + "_table_step"
     if step_key not in st.session_state:
         st.session_state[step_key]=0
     cur_step= st.session_state[step_key]
 
-    N_min= max(1,N_val-5)
+    N_min= max(1, N_val-5)
     N_max= N_val+5
     N_list= range(N_min, N_max+1)
     alpha_list= [0.10,0.05,0.01,0.001]
 
-    # We'll do a placeholder "W_crit" for each (N, alpha).
+    # We'll do row => N, col => alpha => W_crit
     def wilcoxon_crit(N_, a_):
-        # Just a placeholder formula
-        return (N_*(N_+1)/4) * a_
+        # dummy formula for demonstration
+        return (N_*(N_+1)/4) * (1 + 0.1*(1-a_))
 
     table_html= """
     <style>
-    table.wiltable {border-collapse: collapse; margin-top:10px;}
-    table.wiltable td, table.wiltable th {
-      border:1px solid #000; width:80px; height:30px; text-align:center;
-      font-family:sans-serif; font-size:0.9rem;
+    table.wiltable {
+      border-collapse: collapse;
+      margin-top:10px;
     }
-    table.wiltable th {background-color:#f0f0f0;}
+    table.wiltable td, table.wiltable th {
+      border:1px solid #000; 
+      width:80px; 
+      height:30px; 
+      text-align:center;
+      font-family:sans-serif; 
+      font-size:0.9rem;
+    }
+    table.wiltable th {
+      background-color:#f0f0f0;
+    }
     </style>
     <table class="wiltable">
     <tr><th>N</th>
@@ -912,13 +941,13 @@ def show_wilcoxon_lookup(N_val, alpha, tail_s, key_prefix):
 
 
 ###############################################################################
-#            7) BINOMIAL TAB
+#                7) BINOMIAL TAB
 ###############################################################################
 
 def show_binomial_tab():
     st.subheader("Tab 7: Binomial")
 
-    c1,c2= st.columns(2)
+    c1,c2 = st.columns(2)
     with c1:
         n= st.number_input("n (Tab7)", value=10, key="tab7_n")
         x= st.number_input("x (Tab7)", value=3, key="tab7_x")
@@ -957,26 +986,28 @@ def plot_binomial(n,x,p,alpha,tail_s):
     sig= (p_val< alpha)
     msg= f"p-value={p_val:.4f} => " + ("Reject H₀" if sig else "Fail to Reject H₀")
 
+    # color "reject region" in red
     if tail_s=="one-tailed":
         if x< mean_:
-            for i in range(0,x+1):
+            for i in range(0, x+1):
                 bars[i].set_color('red')
         else:
-            for i in range(x,n+1):
+            for i in range(x, n+1):
                 bars[i].set_color('red')
     else:
         if x<= mean_:
-            for i in range(0,x+1):
+            for i in range(0, x+1):
                 bars[i].set_color('red')
-            hi_start= max(0,n-x)
-            for i in range(hi_start,n+1):
+            hi_start= max(0, n-x)
+            for i in range(hi_start, n+1):
                 bars[i].set_color('red')
         else:
-            for i in range(x,n+1):
+            for i in range(x, n+1):
                 bars[i].set_color('red')
-            for i in range(0,(n-x)+1):
+            for i in range(0, (n-x)+1):
                 bars[i].set_color('red')
 
+    # observed bar in blue
     if 0<= x<= n:
         bars[x].set_color('blue')
 
@@ -997,7 +1028,7 @@ def plot_binomial(n,x,p,alpha,tail_s):
 def show_binomial_table_lookup(n_val, alpha, tail_s, key_prefix):
     st.write("### Step-by-Step Binomial Table Lookup")
 
-    step_key= key_prefix+"_table_step"
+    step_key= key_prefix + "_table_step"
     if step_key not in st.session_state:
         st.session_state[step_key]=0
     cur_step= st.session_state[step_key]
@@ -1072,16 +1103,16 @@ def show_binomial_table_lookup(n_val, alpha, tail_s, key_prefix):
             cell_id= f"bin_{nn}_{c_i}"
             val= table_data[nn][a_]
             table_html+= f'<td id="{cell_id}">{val}</td>'
-        table_html+= "</tr>\n"
+        table_html+="</tr>\n"
     table_html+="</table>"
 
     row_in= (n_val in n_list)
     try:
         c_idx= alpha_list.index(alpha)+1
-        col_in=True
+        col_in= True
     except:
-        c_idx=None
-        col_in=False
+        c_idx= None
+        col_in= False
 
     if cur_step>=0 and row_in:
         for cc in range(len(alpha_list)+1):
@@ -1097,7 +1128,7 @@ def show_binomial_table_lookup(n_val, alpha, tail_s, key_prefix):
     steps_list= [
         f"1) Highlight row n={n_val}",
         f"2) Highlight column α={alpha}",
-        "3) Intersection => xcrit or (lo,hi)"
+        "3) Intersection => xcrit or (lo, hi)"
     ]
     max_step=2
     if cur_step>max_step:
@@ -1106,8 +1137,9 @@ def show_binomial_table_lookup(n_val, alpha, tail_s, key_prefix):
         st.write(f"**Step {cur_step+1}**: {steps_list[cur_step]}")
     next_step_button(step_key)
 
+
 ###############################################################################
-#                                MAIN
+#                               MAIN
 ###############################################################################
 
 def main():
@@ -1134,12 +1166,11 @@ def main():
     with tabs[3]:
         show_chi_square_tab()
     with tabs[4]:
-        show_mann_whitney_tab()
+        show_mann_whitney_tab()    # <--- Tab 5
     with tabs[5]:
-        show_wilcoxon_tab()
+        show_wilcoxon_tab()        # <--- Tab 6
     with tabs[6]:
-        show_binomial_tab()
-
+        show_binomial_tab()        # <--- Tab 7
 
 if __name__=="__main__":
     main()
