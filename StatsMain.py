@@ -1,12 +1,13 @@
 ###############################################################################
-#  PSYC‑250  –  Statistical Tables Explorer  (Streamlit, 12×4‑inch figures)
+#  PSYC‑250 – Statistical Tables Explorer  (Streamlit, 12×4‑inch figures)
 #  ---------------------------------------------------------------------------
-#  Seven complete tabs (t, z, F, Chi‑Sq, Mann‑Whitney U, Wilcoxon T, Binomial)
+#  Seven complete tabs (t, z, F, Chi‑Sq, Mann‑Whitney U, Wilcoxon T, Binomial)
 #
-#  Changes to preserve original 7-tab layout:
-#   • Replaced any “H₀” or “Reject H₀” with “H0” to avoid weird errors.
-#   • Removed st.experimental_rerun() calls; Streamlit re-runs automatically 
-#     upon button clicks anyway.
+#  Changes:
+#   • Retained the “H0” (instead of “H₀”) to avoid Unicode issues.
+#   • Removed all st.experimental_rerun() calls.
+#   • **Added reasons** for the H0 decision in the APA blocks under
+#       “Comparison of statistics” and “Comparison of p-values.”
 ###############################################################################
 
 import streamlit as st
@@ -14,16 +15,13 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy import stats
 
-plt.switch_backend("Agg")
+plt.switch_backend("Agg")  # headless back‑end
 
 ###############################################################################
 #                           HELPER FUNCTIONS
 ###############################################################################
 
 def place_label(ax, placed, x, y, txt, *, color="blue"):
-    """
-    Places text on the plot, shifting slightly if it would collide with a prev label.
-    """
     dx = dy = 0.0
     for xx, yy in placed:
         if abs(x - xx) < 0.15 and abs(y - yy) < 0.05:
@@ -36,39 +34,30 @@ def place_label(ax, placed, x, y, txt, *, color="blue"):
 
 def style_cell(html: str, cid: str, *, color: str = "red", px: int = 2,
                bg: str = "#ffe5e5") -> str:
-    """
-    Give one <td id="cid"> a colored border + background.
-    """
     styled_str = (
-        f'id="{cid}" style="border:{px}px solid {color}; '
-        f'background-color:{bg};"'
+        f'id="{cid}" style="border:{px}px solid {color};'
+        f' background-color:{bg};"'
     )
     return html.replace(f'id="{cid}"', styled_str, 1)
 
 
 def wrap_table(css: str, table: str) -> str:
-    """
-    Basic CSS + table wrapper.
-    """
     return f"<style>{css}</style><table>{table}</table>"
 
 
 def container(html: str, *, height: int = 460) -> str:
-    """
-    Scrollable container so big tables won't blow out the page.
-    """
     return f'<div style="overflow:auto; max-height:{height}px;">{html}</div>'
 
 
 def multi_step(build_html, frames: int, *, key: str, height: int = 460):
     """
-    Row→column→cell highlight steps, without using st.experimental_rerun().
+    Displays an HTML table in row→column→cell highlight steps,
+    without calling st.experimental_rerun().
     """
     if key not in st.session_state:
         st.session_state[key] = 0
 
     step = st.session_state[key]
-    # Show the table for this step
     st.markdown(container(build_html(step), height=height), unsafe_allow_html=True)
 
     c1, c2 = st.columns(2)
@@ -77,6 +66,7 @@ def multi_step(build_html, frames: int, *, key: str, height: int = 460):
             st.session_state[key] += 1
     else:
         c1.success("All steps complete!")
+
     if c2.button("Reset Steps", key=f"{key}_reset"):
         st.session_state[key] = 0
 
@@ -100,29 +90,29 @@ def plot_t(t_calc, df, alpha, tail):
     ax.plot(xs, ys, "k")
     ax.fill_between(xs, ys, color="lightgrey", alpha=0.25,
                     label="Fail to Reject H0")
-    labels = []
+    placed_labels = []
 
     if tail.startswith("one"):
         crit = stats.t.ppf(1 - alpha, df)
         ax.fill_between(xs[xs >= crit], ys[xs >= crit],
-                        color="red", alpha=0.30, label="Reject H0")
+                        color="red", alpha=0.3, label="Reject H0")
         ax.axvline(crit, color="green", ls="--")
-        place_label(ax, labels, crit, stats.t.pdf(crit, df) + 0.02,
+        place_label(ax, placed_labels, crit, stats.t.pdf(crit, df) + 0.02,
                     f"tcrit={crit:.2f}", color="green")
     else:
         crit = stats.t.ppf(1 - alpha/2, df)
-        ax.fill_between(xs[xs >= crit], ys[xs >= crit], color="red", alpha=0.30)
+        ax.fill_between(xs[xs >= crit], ys[xs >= crit], color="red", alpha=0.3)
         ax.fill_between(xs[xs <= -crit], ys[xs <= -crit],
-                        color="red", alpha=0.30, label="Reject H0")
+                        color="red", alpha=0.3, label="Reject H0")
         ax.axvline(crit, color="green", ls="--")
         ax.axvline(-crit, color="green", ls="--")
-        place_label(ax, labels, crit, stats.t.pdf(crit, df) + 0.02,
+        place_label(ax, placed_labels, crit, stats.t.pdf(crit, df) + 0.02,
                     f"+tcrit={crit:.2f}", color="green")
-        place_label(ax, labels, -crit, stats.t.pdf(-crit, df) + 0.02,
+        place_label(ax, placed_labels, -crit, stats.t.pdf(-crit, df) + 0.02,
                     f"–tcrit={crit:.2f}", color="green")
 
     ax.axvline(t_calc, color="blue", ls="--")
-    place_label(ax, labels, t_calc, stats.t.pdf(t_calc, df) + 0.02,
+    place_label(ax, placed_labels, t_calc, stats.t.pdf(t_calc, df) + 0.02,
                 f"tcalc={t_calc:.2f}", color="blue")
 
     ax.set_xlabel("t")
@@ -154,6 +144,7 @@ def build_t_html(df: int, alpha: float, tail: str, step: int) -> str:
 
     html = wrap_table(CSS_BASE, f"<tr><th>df</th>{head}</tr>{body}")
 
+    # Stepwise highlight
     if step >= 0:
         for i in range(len(heads)+1):
             html = style_cell(html, f"t_{df}_{i}")
@@ -183,17 +174,24 @@ def t_apa(t_val: float, df: int, alpha: float, tail: str):
         crit = stats.t.ppf(1 - alpha/2, df)
         reject = (abs(t_val) > crit)
 
-    p_crit = alpha
     decision = "rejected" if reject else "failed to reject"
+
+    # Explanation for the decision lines
+    if reject:
+        reason_stats = "because the calculated statistic exceeded the critical value"
+        reason_p = "because the computed p-value was below alpha"
+    else:
+        reason_stats = "because the calculated statistic did not exceed the critical value"
+        reason_p = "because the computed p-value was not below alpha"
 
     st.markdown(
         "**APA interpretation**  \n"
-        f"Calculated statistic: *t*({df}) = {t_val:.2f}, *p* = {p_calc:.3f}.  \n"
-        f"Critical statistic: tcrit = {crit:.2f}, *p* = {p_crit:.3f}.  \n"
-        f"Comparison of statistics → H0 **{decision}**.  \n"
-        f"Comparison of *p*‑values → H0 **{decision}**.  \n"
-        f"**APA 7 report:** *t*({df}) = {t_val:.2f}, *p* = {p_calc:.3f} "
-        f"({tail}). The null hypothesis was **{decision}** at α = {alpha:.2f}."
+        f"Calculated statistic: *t*({df})={t_val:.2f}, *p*={p_calc:.3f}.  \n"
+        f"Critical statistic: tcrit={crit:.2f}, *p*={alpha:.3f}.  \n"
+        f"Comparison of statistics → H0 **{decision}** ({reason_stats}).  \n"
+        f"Comparison of *p*-values → H0 **{decision}** ({reason_p}).  \n"
+        f"**APA 7 report:** *t*({df})={t_val:.2f}, *p*={p_calc:.3f} "
+        f"({tail}). The null hypothesis was **{decision}** at α={alpha:.2f}."
     )
 
 
@@ -228,14 +226,14 @@ def plot_z(z_calc, alpha, tail):
     ax.plot(xs, ys, "k")
     ax.fill_between(xs, ys, color="lightgrey", alpha=0.25,
                     label="Fail to Reject H0")
-    labels = []
+    placed_labels = []
 
     if tail.startswith("one"):
         crit = stats.norm.ppf(1 - alpha)
         ax.fill_between(xs[xs >= crit], ys[xs >= crit],
                         color="red", alpha=0.30, label="Reject H0")
         ax.axvline(crit, color="green", ls="--")
-        place_label(ax, labels, crit, stats.norm.pdf(crit) + 0.02,
+        place_label(ax, placed_labels, crit, stats.norm.pdf(crit) + 0.02,
                     f"zcrit={crit:.2f}", color="green")
     else:
         crit = stats.norm.ppf(1 - alpha/2)
@@ -244,13 +242,13 @@ def plot_z(z_calc, alpha, tail):
                         color="red", alpha=0.30, label="Reject H0")
         ax.axvline(crit, color="green", ls="--")
         ax.axvline(-crit, color="green", ls="--")
-        place_label(ax, labels, crit, stats.norm.pdf(crit) + 0.02,
+        place_label(ax, placed_labels, crit, stats.norm.pdf(crit) + 0.02,
                     f"+zcrit={crit:.2f}", color="green")
-        place_label(ax, labels, -crit, stats.norm.pdf(-crit) + 0.02,
+        place_label(ax, placed_labels, -crit, stats.norm.pdf(-crit) + 0.02,
                     f"–zcrit={crit:.2f}", color="green")
 
     ax.axvline(z_calc, color="blue", ls="--")
-    place_label(ax, labels, z_calc, stats.norm.pdf(z_calc) + 0.02,
+    place_label(ax, placed_labels, z_calc, stats.norm.pdf(z_calc) + 0.02,
                 f"zcalc={z_calc:.2f}", color="blue")
 
     ax.set_xlabel("z")
@@ -290,8 +288,8 @@ def build_z_html(z: float, alpha: float, tail: str, step: int) -> str:
     html = wrap_table(CSS_BASE, f"<tr><th>z.x</th>{head}</tr>{body}")
 
     if step >= 0:
-        for c in Cols:
-            html = style_cell(html, f"z_{row:.1f}_{c:.2f}")
+        for cc in Cols:
+            html = style_cell(html, f"z_{row:.1f}_{cc:.2f}")
         html = style_cell(html, f"z_{row:.1f}_0")
     if step >= 1:
         for rr in rows:
@@ -318,17 +316,22 @@ def z_apa(z_val: float, alpha: float, tail: str):
         crit = stats.norm.ppf(1 - alpha/2)
         reject = (abs(z_val) > crit)
 
-    p_crit = alpha
     decision = "rejected" if reject else "failed to reject"
+    if reject:
+        reason_stats = "because the calculated statistic exceeded the critical value"
+        reason_p = "because the computed p-value was below alpha"
+    else:
+        reason_stats = "because the calculated statistic did not exceed the critical value"
+        reason_p = "because the computed p-value was not below alpha"
 
     st.markdown(
         "**APA interpretation**  \n"
-        f"Calculated statistic: *z* = {z_val:.2f}, *p* = {p_calc:.3f}.  \n"
-        f"Critical statistic: zcrit = {crit:.2f}, *p* = {p_crit:.3f}.  \n"
-        f"Statistic comparison → H0 **{decision}**.  \n"
-        f"*p* comparison → H0 **{decision}**.  \n"
-        f"**APA 7 report:** *z* = {z_val:.2f}, *p* = {p_calc:.3f} "
-        f"({tail}). The null hypothesis was **{decision}** at α = {alpha:.2f}."
+        f"Calculated statistic: *z*={z_val:.2f}, *p*={p_calc:.3f}.  \n"
+        f"Critical statistic: zcrit={crit:.2f}, *p*={alpha:.3f}.  \n"
+        f"Comparison of statistics → H0 **{decision}** ({reason_stats}).  \n"
+        f"Comparison of *p*-values → H0 **{decision}** ({reason_p}).  \n"
+        f"**APA 7 report:** *z*={z_val:.2f}, *p*={p_calc:.3f} "
+        f"({tail}). The null hypothesis was **{decision}** at α={alpha:.2f}."
     )
 
 
@@ -395,7 +398,7 @@ def build_f_html(df1: int, df2: int, alpha: float, step: int) -> str:
             row_html += f'<td id="f_{r}_{i}">{crit_val:.2f}</td>'
         body += f"<tr>{row_html}</tr>"
 
-    html = wrap_table(CSS_BASE, f"<tr><th>df1＼df2</th>{head}</tr>{body}")
+    html = wrap_table(CSS_BASE, f"<tr><th>df1\\df2</th>{head}</tr>{body}")
 
     if step >= 0:
         for i in range(len(cols)+1):
@@ -422,13 +425,20 @@ def f_apa(f_val: float, df1: int, df2: int, alpha: float):
     reject = (f_val > crit)
     decision = "rejected" if reject else "failed to reject"
 
+    if reject:
+        reason_stats = "because the calculated F exceeded the critical value"
+        reason_p = "because the computed p-value was below alpha"
+    else:
+        reason_stats = "because the calculated F did not exceed the critical value"
+        reason_p = "because the computed p-value was not below alpha"
+
     st.markdown(
         "**APA interpretation**  \n"
-        f"Calculated statistic: *F*({df1}, {df2}) = {f_val:.2f}, *p*={p_calc:.3f}.  \n"
+        f"Calculated statistic: *F*({df1}, {df2})={f_val:.2f}, *p*={p_calc:.3f}.  \n"
         f"Critical statistic: Fcrit={crit:.2f}, *p*={alpha:.3f}.  \n"
-        f"Statistic comparison → H0 **{decision}**.  \n"
-        f"*p* comparison → H0 **{decision}**.  \n"
-        f"**APA 7 report:** *F*({df1}, {df2}) = {f_val:.2f}, *p*={p_calc:.3f}. "
+        f"Comparison of statistics → H0 **{decision}** ({reason_stats}).  \n"
+        f"Comparison of *p*-values → H0 **{decision}** ({reason_p}).  \n"
+        f"**APA 7 report:** *F*({df1}, {df2})={f_val:.2f}, *p*={p_calc:.3f}. "
         f"The null hypothesis was **{decision}** at α={alpha:.2f}."
     )
 
@@ -526,13 +536,20 @@ def chi_apa(chi_val: float, df: int, alpha: float):
     reject = (chi_val > crit)
     decision = "rejected" if reject else "failed to reject"
 
+    if reject:
+        reason_stats = "because the calculated chi-square exceeded the critical value"
+        reason_p = "because the computed p-value was below alpha"
+    else:
+        reason_stats = "because the calculated chi-square did not exceed the critical value"
+        reason_p = "because the computed p-value was not below alpha"
+
     st.markdown(
         "**APA interpretation**  \n"
-        f"Calculated statistic: χ²({df}) = {chi_val:.2f}, *p*={p_calc:.3f}.  \n"
+        f"Calculated statistic: χ²({df})={chi_val:.2f}, *p*={p_calc:.3f}.  \n"
         f"Critical statistic: χ²crit={crit:.2f}, *p*={alpha:.3f}.  \n"
-        f"Statistic comparison → H0 **{decision}**.  \n"
-        f"*p* comparison → H0 **{decision}**.  \n"
-        f"**APA 7 report:** χ²({df}) = {chi_val:.2f}, *p*={p_calc:.3f}. "
+        f"Comparison of statistics → H0 **{decision}** ({reason_stats}).  \n"
+        f"Comparison of *p*-values → H0 **{decision}** ({reason_p}).  \n"
+        f"**APA 7 report:** χ²({df})={chi_val:.2f}, *p*={p_calc:.3f}. "
         f"The null hypothesis was **{decision}** at α={alpha:.3f}."
     )
 
@@ -588,10 +605,9 @@ def plot_u(u_calc, n1, n2, alpha, tail):
     else:
         crit = u_crit(n1, n2, alpha, tail)
         hi = n1*n2 - crit
-        ax.fill_between(xs[xs <= crit], ys[xs <= crit],
-                        color="red", alpha=0.30)
-        ax.fill_between(xs[xs >= hi], ys[xs >= hi],
-                        color="red", alpha=0.30, label="Reject H0")
+        ax.fill_between(xs[xs <= crit], ys[xs <= crit], color="red", alpha=0.30)
+        ax.fill_between(xs[xs >= hi], ys[xs >= hi], color="red", alpha=0.30,
+                        label="Reject H0")
         ax.axvline(crit, color="green", ls="--")
         ax.axvline(hi, color="green", ls="--")
 
@@ -656,16 +672,23 @@ def u_apa(u_val: int, n1: int, n2: int, alpha: float, tail: str):
         reject = (u_val <= crit) or (u_val >= n1*n2 - crit)
 
     decision = "rejected" if reject else "failed to reject"
+    if reject:
+        reason_stats = "because the U value was in the rejection region"
+        reason_p = "because the computed p-value was below alpha"
+    else:
+        reason_stats = "because the U value was not in the rejection region"
+        reason_p = "because the computed p-value was not below alpha"
+
     tail_txt = "one‑tailed" if tail.startswith("one") else "two‑tailed"
 
     st.markdown(
         "**APA interpretation**  \n"
         f"Calculated statistic: *U*={u_val}, *p*={p_calc:.3f}.  \n"
         f"Critical statistic: Ucrit={crit}, *p*={alpha:.3f}.  \n"
-        f"Statistic comparison → H0 **{decision}**.  \n"
-        f"*p* comparison → H0 **{decision}**.  \n"
-        f"**APA 7 report:** *U*={u_val}, *p*={p_calc:.3f} ({tail_txt}). "
-        f"The null hypothesis was **{decision}** at α={alpha:.2f}."
+        f"Comparison of statistics → H0 **{decision}** ({reason_stats}).  \n"
+        f"Comparison of *p*-values → H0 **{decision}** ({reason_p}).  \n"
+        f"**APA 7 report:** *U*={u_val}, *p*={p_calc:.3f} "
+        f"({tail_txt}). The null hypothesis was **{decision}** at α={alpha:.2f}."
     )
 
 
@@ -784,21 +807,29 @@ def w_apa(t_val: int, n: int, alpha: float, tail: str):
         crit = w_crit(n, alpha, tail)
         reject = (t_val <= crit)
     else:
-        p_calc = stats.norm.sf(abs(t_val - μ)/σ)*2
+        p_calc = stats.norm.sf(abs(t_val - μ)/σ) * 2
         crit = w_crit(n, alpha, tail)
         reject = (t_val <= crit) or (t_val >= n*(n+1)/2 - crit)
 
     decision = "rejected" if reject else "failed to reject"
+    if reject:
+        reason_stats = "because the T value fell into the rejection region"
+        reason_p = "because the computed p-value was below alpha"
+    else:
+        reason_stats = "because the T value did not fall into the rejection region"
+        reason_p = "because the computed p-value was not below alpha"
+
     tail_txt = "one‑tailed" if tail.startswith("one") else "two‑tailed"
 
     st.markdown(
         "**APA interpretation**  \n"
         f"Calculated statistic: *T*={t_val}, *p*={p_calc:.3f}.  \n"
         f"Critical statistic: Tcrit={crit}, *p*={alpha:.3f}.  \n"
-        f"Statistic comparison → H0 **{decision}**.  \n"
-        f"*p* comparison → H0 **{decision}**.  \n"
-        f"**APA 7 report:** *T*={t_val}, *p*={p_calc:.3f} ({tail_txt}). "
-        f"The null hypothesis was **{decision}** at α={alpha:.2f}."
+        f"Comparison of statistics → H0 **{decision}** ({reason_stats}).  \n"
+        f"Comparison of *p*-values → H0 **{decision}** ({reason_p}).  \n"
+        f"**APA 7 report:** *T*={t_val}, *p*={p_calc:.3f} "
+        f"({tail_txt}). The null hypothesis was **{decision}** "
+        f"at α={alpha:.2f}."
     )
 
 
@@ -820,7 +851,6 @@ def tab_w():
     st.write("**Step‑by‑step T‑table**")
     w_table(n, alpha, tail)
     w_apa(t_val, n, alpha, tail)
-
 
 ###############################################################################
 #                        TAB 7: Binomial
@@ -849,7 +879,6 @@ def critical_binom(n: int, p: float, alpha: float):
 def plot_binom(k, n, p):
     xs = np.arange(n+1)
     ys = stats.binom.pmf(xs, n, p)
-
     fig, ax = plt.subplots(figsize=(12, 4), dpi=100)
     ax.bar(xs, ys, color="lightgrey")
     ax.bar(k, stats.binom.pmf(k, n, p), color="blue", label=f"k={k}")
@@ -862,9 +891,7 @@ def plot_binom(k, n, p):
 
 
 def build_b_html(k: int, n: int, p: float, step: int) -> str:
-    # show ~±5 around k
     k_vals = list(range(max(0, k-5), min(n, k+5)+1))
-
     head = "<th>P(X=k)</th><th>P(X≤k)</th><th>P(X≥k)</th>"
     body = ""
     for kv in k_vals:
@@ -900,20 +927,26 @@ def binom_table(k: int, n: int, p: float):
 
 def binom_apa(k: int, n: int, p: float, alpha: float):
     cdf_val = stats.binom.cdf(k, n, p)
-    # two-tailed p
-    p_calc = 2 * min(cdf_val, 1 - cdf_val + stats.binom.pmf(k, n, p))
+    p_calc = 2 * min(cdf_val, 1.0 - cdf_val + stats.binom.pmf(k, n, p))
     p_calc = min(p_calc, 1.0)
 
     k_lo, k_hi = critical_binom(n, p, alpha)
     reject = (k <= k_lo) or (k >= k_hi)
     decision = "rejected" if reject else "failed to reject"
 
+    if reject:
+        reason_stats = "because k was within the critical rejection region"
+        reason_p = "because the computed p-value was below alpha"
+    else:
+        reason_stats = "because k was not in the critical region"
+        reason_p = "because the computed p-value was not below alpha"
+
     st.markdown(
         "**APA interpretation**  \n"
         f"Calculated statistic: k={k}, *p*={p_calc:.3f}.  \n"
         f"Critical region: k ≤ {k_lo} or k ≥ {k_hi}, *p*={alpha:.3f}.  \n"
-        f"Statistic comparison → H0 **{decision}**.  \n"
-        f"*p* comparison → H0 **{decision}**.  \n"
+        f"Comparison of statistics → H0 **{decision}** ({reason_stats}).  \n"
+        f"Comparison of *p*-values → H0 **{decision}** ({reason_p}).  \n"
         f"**APA 7 report:** Exact binomial test, *p*={p_calc:.3f}. "
         f"The null hypothesis was **{decision}** at α={alpha:.2f}."
     )
@@ -923,11 +956,13 @@ def tab_binom():
     st.subheader("Tab 7 • Binomial")
     c1, c2 = st.columns(2)
     with c1:
-        n = st.number_input("n (trials)", min_value=1, value=20, step=1, key="b_n")
-        p = st.number_input("p (null proportion)", value=0.50, step=0.01,
-                            min_value=0.01, max_value=0.99, key="b_p")
+        n = st.number_input("n (trials)", min_value=1, value=20,
+                            step=1, key="b_n")
+        p = st.number_input("p (null proportion)", value=0.50,
+                            step=0.01, min_value=0.01, max_value=0.99, key="b_p")
     with c2:
-        k = st.number_input("k (successes)", min_value=0, value=12, step=1, key="b_k")
+        k = st.number_input("k (successes)", min_value=0, value=12,
+                            step=1, key="b_k")
         alpha = st.number_input("α (two-tailed)", value=0.05, step=0.01,
                                 min_value=0.0001, max_value=0.5, key="b_alpha")
 
@@ -943,7 +978,7 @@ def tab_binom():
 ###############################################################################
 
 def main():
-    st.set_page_config("PSYC250 – Statistical Tables Explorer", layout="wide")
+    st.set_page_config("PSYC250 – Statistical Tables Explorer", layout="wide")
     st.title("PSYC250 – Statistical Tables Explorer (12×4 figures)")
 
     tabs = st.tabs([
