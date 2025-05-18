@@ -7,6 +7,8 @@ from io import StringIO # For reading CSV string
 
 # Helper function to create APA style p-value string
 def apa_p_value(p_val):
+    if pd.isna(p_val): # Handle NaN p-values
+        return "p N/A"
     if p_val < 0.001:
         return "p < .001"
     else:
@@ -68,7 +70,6 @@ TUKEY_CSV_DATA = """df,k,alpha_0.01,alpha_0.05,alpha_0.10
 # Function to get Tukey q critical value from CSV
 def get_tukey_q_from_csv(df_error, k, alpha):
     try:
-        # Use StringIO to read the string data as if it were a file
         df_tukey = pd.read_csv(StringIO(TUKEY_CSV_DATA))
     except Exception as e:
         st.error(f"Error reading embedded Tukey CSV data: {e}")
@@ -77,15 +78,13 @@ def get_tukey_q_from_csv(df_error, k, alpha):
     alpha_col_map = {0.01: 'alpha_0.01', 0.05: 'alpha_0.05', 0.10: 'alpha_0.10'}
     alpha_lookup_key = alpha
     if alpha not in alpha_col_map:
-        st.warning(f"Alpha value {alpha} not directly available in CSV for exact match (0.01, 0.05, 0.10). Using alpha=0.05 for CSV lookup if exact alpha column not present.")
-        # Keep original alpha for messages, but use a key that exists in map for lookup
+        st.warning(f"Alpha value {alpha:.4f} not directly available in CSV (0.01, 0.05, 0.10). Using alpha=0.05 for CSV lookup if exact alpha column not present.")
         alpha_lookup_key = 0.05 
     
-    target_col = alpha_col_map.get(alpha_lookup_key, 'alpha_0.05') # Default to 0.05 if somehow still not found
+    target_col = alpha_col_map.get(alpha_lookup_key, 'alpha_0.05')
 
-    # Filter for k
     df_filtered_k = df_tukey[df_tukey['k'] == k]
-    k_to_use = k # k value that will be used for lookup, might change if exact k not found
+    k_to_use = k
     if df_filtered_k.empty:
         available_k = sorted(df_tukey['k'].unique())
         lower_k_values = [val for val in available_k if val < k]
@@ -96,34 +95,28 @@ def get_tukey_q_from_csv(df_error, k, alpha):
             k_to_use = max(lower_k_values)
             st.warning(f"Exact k={k} not found in CSV. Using nearest lower k={k_to_use}.")
         df_filtered_k = df_tukey[df_tukey['k'] == k_to_use]
-        if df_filtered_k.empty: # Should not happen if k_to_use is from available_k
+        if df_filtered_k.empty:
             st.error(f"Could not find data for k={k_to_use} in CSV after attempting fallback.")
             return None
 
-
-    # Find nearest lower df
     df_filtered_k_sorted = df_filtered_k.sort_values('df')
-    
-    # Exact match for df
     exact_match = df_filtered_k_sorted[df_filtered_k_sorted['df'] == df_error]
     if not exact_match.empty:
         return exact_match.iloc[0][target_col]
 
-    # Nearest lower df
     lower_dfs = df_filtered_k_sorted[df_filtered_k_sorted['df'] < df_error]
     if not lower_dfs.empty:
         chosen_row = lower_dfs.iloc[-1]
         st.warning(f"Exact df={df_error} not found for k={k_to_use} in CSV. Using nearest lower df={chosen_row['df']}.")
         return chosen_row[target_col]
 
-    # Nearest higher df if no lower df (e.g. df_error is smaller than smallest df in table for that k)
     higher_dfs = df_filtered_k_sorted[df_filtered_k_sorted['df'] > df_error]
     if not higher_dfs.empty:
         chosen_row = higher_dfs.iloc[0]
         st.warning(f"Exact df={df_error} not found for k={k_to_use} in CSV, no lower df available. Using nearest higher df={chosen_row['df']}.")
         return chosen_row[target_col]
         
-    st.error(f"Could not find a suitable value in CSV for df={df_error}, k={k_to_use}, alpha={alpha_lookup_key}.")
+    st.error(f"Could not find a suitable value in CSV for df={df_error}, k={k_to_use}, alpha={alpha_lookup_key:.4f}.")
     return None
 
 
@@ -142,10 +135,9 @@ def tab_t_distribution():
         st.subheader("Distribution Plot")
         fig_t, ax_t = plt.subplots(figsize=(8,5)) 
         
-        # Dynamic x-axis range based on df and test statistic
         plot_min_t = min(stats.t.ppf(0.0001, df_t), test_stat_t - 2*stats.t.std(df_t), -4.0)
         plot_max_t = max(stats.t.ppf(0.9999, df_t), test_stat_t + 2*stats.t.std(df_t), 4.0)
-        if abs(test_stat_t) > 4: # Ensure test stat is visible if it's an outlier
+        if abs(test_stat_t) > 4: 
             plot_min_t = min(plot_min_t, test_stat_t -1)
             plot_max_t = max(plot_max_t, test_stat_t +1)
 
@@ -163,18 +155,18 @@ def tab_t_distribution():
             x_fill_lower = np.linspace(plot_min_t, crit_val_t_lower, 100)
             ax_t.fill_between(x_fill_upper, stats.t.pdf(x_fill_upper, df_t), color='red', alpha=0.5, label=f'α/2 = {alpha_t/2:.4f}')
             ax_t.fill_between(x_fill_lower, stats.t.pdf(x_fill_lower, df_t), color='red', alpha=0.5)
-            if crit_val_t_upper is not None: ax_t.axvline(crit_val_t_upper, color='red', linestyle='--', lw=1)
-            if crit_val_t_lower is not None: ax_t.axvline(crit_val_t_lower, color='red', linestyle='--', lw=1)
+            if crit_val_t_upper is not None and not np.isnan(crit_val_t_upper): ax_t.axvline(crit_val_t_upper, color='red', linestyle='--', lw=1)
+            if crit_val_t_lower is not None and not np.isnan(crit_val_t_lower): ax_t.axvline(crit_val_t_lower, color='red', linestyle='--', lw=1)
         elif tail_t == "One-tailed (right)":
             crit_val_t_upper = stats.t.ppf(1 - alpha_t, df_t)
             x_fill_upper = np.linspace(crit_val_t_upper, plot_max_t, 100)
             ax_t.fill_between(x_fill_upper, stats.t.pdf(x_fill_upper, df_t), color='red', alpha=0.5, label=f'α = {alpha_t:.4f}')
-            if crit_val_t_upper is not None: ax_t.axvline(crit_val_t_upper, color='red', linestyle='--', lw=1)
-        else: # One-tailed (left)
+            if crit_val_t_upper is not None and not np.isnan(crit_val_t_upper): ax_t.axvline(crit_val_t_upper, color='red', linestyle='--', lw=1)
+        else: 
             crit_val_t_lower = stats.t.ppf(alpha_t, df_t)
             x_fill_lower = np.linspace(plot_min_t, crit_val_t_lower, 100)
             ax_t.fill_between(x_fill_lower, stats.t.pdf(x_fill_lower, df_t), color='red', alpha=0.5, label=f'α = {alpha_t:.4f}')
-            if crit_val_t_lower is not None: ax_t.axvline(crit_val_t_lower, color='red', linestyle='--', lw=1)
+            if crit_val_t_lower is not None and not np.isnan(crit_val_t_lower): ax_t.axvline(crit_val_t_lower, color='red', linestyle='--', lw=1)
 
         ax_t.axvline(test_stat_t, color='green', linestyle='-', lw=2, label=f'Test Stat = {test_stat_t:.3f}')
         ax_t.set_title(f't-Distribution (df={df_t}) with Critical Region(s)')
@@ -186,7 +178,7 @@ def tab_t_distribution():
 
         st.subheader("Critical Value Table Snippet")
         alphas_table = [0.10, 0.05, 0.025, 0.01, 0.005, alpha_t, alpha_t/2 if tail_t == "Two-tailed" else alpha_t]
-        alphas_table = sorted(list(set(a for a in alphas_table if 0.00005 < a < 0.50005))) # Unique, sorted, and within reasonable bounds
+        alphas_table = sorted(list(set(a for a in alphas_table if 0.00005 < a < 0.50005))) 
 
         table_data_t_list = []
         for a_val_one_tail in alphas_table:
@@ -195,7 +187,7 @@ def tab_t_distribution():
             cv_lower = stats.t.ppf(a_val_one_tail, df_t)
             table_data_t_list.append({
                 "α (One-Tail)": f"{a_val_one_tail:.4f}",
-                "α (Two-Tail)": f"{a_val_two_tail:.4f}" if a_val_two_tail <= 0.51 else "-", # Show two-tail if sensible
+                "α (Two-Tail)": f"{a_val_two_tail:.4f}" if a_val_two_tail <= 0.51 else "-", 
                 "t_crit (Lower)": f"{cv_lower:.3f}",
                 "t_crit (Upper)": f"{cv_upper:.3f}"
             })
@@ -204,10 +196,9 @@ def tab_t_distribution():
         def highlight_alpha_row_t(row):
             highlight = False
             if tail_t == "Two-tailed":
-                # Check if the one-tail alpha in the table corresponds to alpha_t/2 for the user
                 if abs(float(row["α (One-Tail)"]) - (alpha_t / 2)) < 1e-5 :
                     highlight = True
-            else: # One-tailed
+            else: 
                 if abs(float(row["α (One-Tail)"]) - alpha_t) < 1e-5:
                     highlight = True
             return ['background-color: yellow'] * len(row) if highlight else [''] * len(row)
@@ -234,26 +225,26 @@ def tab_t_distribution():
         p_val_t_one_right = stats.t.sf(test_stat_t, df_t)
         p_val_t_one_left = stats.t.cdf(test_stat_t, df_t)
         p_val_t_two = 2 * stats.t.sf(abs(test_stat_t), df_t)
-        p_val_t_two = min(p_val_t_two, 1.0) # Cap p-value at 1.0
+        p_val_t_two = min(p_val_t_two, 1.0) 
 
 
         crit_val_display = "N/A"
         p_val_for_crit_val_display = alpha_t 
 
         if tail_t == "Two-tailed":
-            crit_val_display = f"±{crit_val_t_upper:.3f}" if crit_val_t_upper is not None else "N/A"
+            crit_val_display = f"±{crit_val_t_upper:.3f}" if crit_val_t_upper is not None and not np.isnan(crit_val_t_upper) else "N/A"
             p_val_calc = p_val_t_two
-            decision_crit = abs(test_stat_t) > crit_val_t_upper if crit_val_t_upper is not None else False
+            decision_crit = abs(test_stat_t) > crit_val_t_upper if crit_val_t_upper is not None and not np.isnan(crit_val_t_upper) else False
             comparison_crit_str = f"|{test_stat_t:.3f}| ({abs(test_stat_t):.3f}) > {crit_val_t_upper:.3f}" if decision_crit else f"|{test_stat_t:.3f}| ({abs(test_stat_t):.3f}) ≤ {crit_val_t_upper:.3f}"
         elif tail_t == "One-tailed (right)":
-            crit_val_display = f"{crit_val_t_upper:.3f}" if crit_val_t_upper is not None else "N/A"
+            crit_val_display = f"{crit_val_t_upper:.3f}" if crit_val_t_upper is not None and not np.isnan(crit_val_t_upper) else "N/A"
             p_val_calc = p_val_t_one_right
-            decision_crit = test_stat_t > crit_val_t_upper if crit_val_t_upper is not None else False
+            decision_crit = test_stat_t > crit_val_t_upper if crit_val_t_upper is not None and not np.isnan(crit_val_t_upper) else False
             comparison_crit_str = f"{test_stat_t:.3f} > {crit_val_t_upper:.3f}" if decision_crit else f"{test_stat_t:.3f} ≤ {crit_val_t_upper:.3f}"
-        else: # One-tailed (left)
-            crit_val_display = f"{crit_val_t_lower:.3f}" if crit_val_t_lower is not None else "N/A"
+        else: 
+            crit_val_display = f"{crit_val_t_lower:.3f}" if crit_val_t_lower is not None and not np.isnan(crit_val_t_lower) else "N/A"
             p_val_calc = p_val_t_one_left
-            decision_crit = test_stat_t < crit_val_t_lower if crit_val_t_lower is not None else False
+            decision_crit = test_stat_t < crit_val_t_lower if crit_val_t_lower is not None and not np.isnan(crit_val_t_lower) else False
             comparison_crit_str = f"{test_stat_t:.3f} < {crit_val_t_lower:.3f}" if decision_crit else f"{test_stat_t:.3f} ≥ {crit_val_t_lower:.3f}"
 
         decision_p_alpha = p_val_calc < alpha_t
@@ -305,18 +296,18 @@ def tab_z_distribution():
             x_fill_lower = np.linspace(plot_min_z, crit_val_z_lower, 100)
             ax_z.fill_between(x_fill_upper, stats.norm.pdf(x_fill_upper), color='red', alpha=0.5, label=f'α/2 = {alpha_z/2:.4f}')
             ax_z.fill_between(x_fill_lower, stats.norm.pdf(x_fill_lower), color='red', alpha=0.5)
-            if crit_val_z_upper is not None: ax_z.axvline(crit_val_z_upper, color='red', linestyle='--', lw=1)
-            if crit_val_z_lower is not None: ax_z.axvline(crit_val_z_lower, color='red', linestyle='--', lw=1)
+            if crit_val_z_upper is not None and not np.isnan(crit_val_z_upper): ax_z.axvline(crit_val_z_upper, color='red', linestyle='--', lw=1)
+            if crit_val_z_lower is not None and not np.isnan(crit_val_z_lower): ax_z.axvline(crit_val_z_lower, color='red', linestyle='--', lw=1)
         elif tail_z == "One-tailed (right)":
             crit_val_z_upper = stats.norm.ppf(1 - alpha_z)
             x_fill_upper = np.linspace(crit_val_z_upper, plot_max_z, 100)
             ax_z.fill_between(x_fill_upper, stats.norm.pdf(x_fill_upper), color='red', alpha=0.5, label=f'α = {alpha_z:.4f}')
-            if crit_val_z_upper is not None: ax_z.axvline(crit_val_z_upper, color='red', linestyle='--', lw=1)
-        else: # One-tailed (left)
+            if crit_val_z_upper is not None and not np.isnan(crit_val_z_upper): ax_z.axvline(crit_val_z_upper, color='red', linestyle='--', lw=1)
+        else: 
             crit_val_z_lower = stats.norm.ppf(alpha_z)
             x_fill_lower = np.linspace(plot_min_z, crit_val_z_lower, 100)
             ax_z.fill_between(x_fill_lower, stats.norm.pdf(x_fill_lower), color='red', alpha=0.5, label=f'α = {alpha_z:.4f}')
-            if crit_val_z_lower is not None: ax_z.axvline(crit_val_z_lower, color='red', linestyle='--', lw=1)
+            if crit_val_z_lower is not None and not np.isnan(crit_val_z_lower): ax_z.axvline(crit_val_z_lower, color='red', linestyle='--', lw=1)
 
         ax_z.axvline(test_stat_z, color='green', linestyle='-', lw=2, label=f'Test Stat = {test_stat_z:.3f}')
         ax_z.set_title('Standard Normal Distribution with Critical Region(s)')
@@ -348,7 +339,7 @@ def tab_z_distribution():
             if tail_z == "Two-tailed":
                 if abs(float(row["α (One-Tail)"]) - (alpha_z / 2)) < 1e-5 :
                     highlight = True
-            else: # One-tailed
+            else: 
                 if abs(float(row["α (One-Tail)"]) - alpha_z) < 1e-5:
                     highlight = True
             return ['background-color: yellow'] * len(row) if highlight else [''] * len(row)
@@ -380,19 +371,19 @@ def tab_z_distribution():
         p_val_for_crit_val_z_display = alpha_z
 
         if tail_z == "Two-tailed":
-            crit_val_z_display = f"±{crit_val_z_upper:.3f}" if crit_val_z_upper is not None else "N/A"
+            crit_val_z_display = f"±{crit_val_z_upper:.3f}" if crit_val_z_upper is not None and not np.isnan(crit_val_z_upper) else "N/A"
             p_val_calc_z = p_val_z_two
-            decision_crit_z = abs(test_stat_z) > crit_val_z_upper if crit_val_z_upper is not None else False
+            decision_crit_z = abs(test_stat_z) > crit_val_z_upper if crit_val_z_upper is not None and not np.isnan(crit_val_z_upper) else False
             comparison_crit_str_z = f"|{test_stat_z:.3f}| ({abs(test_stat_z):.3f}) > {crit_val_z_upper:.3f}" if decision_crit_z else f"|{test_stat_z:.3f}| ({abs(test_stat_z):.3f}) ≤ {crit_val_z_upper:.3f}"
         elif tail_z == "One-tailed (right)":
-            crit_val_z_display = f"{crit_val_z_upper:.3f}" if crit_val_z_upper is not None else "N/A"
+            crit_val_z_display = f"{crit_val_z_upper:.3f}" if crit_val_z_upper is not None and not np.isnan(crit_val_z_upper) else "N/A"
             p_val_calc_z = p_val_z_one_right
-            decision_crit_z = test_stat_z > crit_val_z_upper if crit_val_z_upper is not None else False
+            decision_crit_z = test_stat_z > crit_val_z_upper if crit_val_z_upper is not None and not np.isnan(crit_val_z_upper) else False
             comparison_crit_str_z = f"{test_stat_z:.3f} > {crit_val_z_upper:.3f}" if decision_crit_z else f"{test_stat_z:.3f} ≤ {crit_val_z_upper:.3f}"
-        else: # One-tailed (left)
-            crit_val_z_display = f"{crit_val_z_lower:.3f}" if crit_val_z_lower is not None else "N/A"
+        else: 
+            crit_val_z_display = f"{crit_val_z_lower:.3f}" if crit_val_z_lower is not None and not np.isnan(crit_val_z_lower) else "N/A"
             p_val_calc_z = p_val_z_one_left
-            decision_crit_z = test_stat_z < crit_val_z_lower if crit_val_z_lower is not None else False
+            decision_crit_z = test_stat_z < crit_val_z_lower if crit_val_z_lower is not None and not np.isnan(crit_val_z_lower) else False
             comparison_crit_str_z = f"{test_stat_z:.3f} < {crit_val_z_lower:.3f}" if decision_crit_z else f"{test_stat_z:.3f} ≥ {crit_val_z_lower:.3f}"
 
         decision_p_alpha_z = p_val_calc_z < alpha_z
@@ -421,14 +412,14 @@ def tab_f_distribution():
         dfn_f = st.number_input("Numerator Degrees of Freedom (df1)", 1, 1000, 3, 1, key="dfn_f")
         dfd_f = st.number_input("Denominator Degrees of Freedom (df2)", 1, 1000, 20, 1, key="dfd_f")
         tail_f = st.radio("Tail Selection", ("One-tailed (right)", "Two-tailed (for variance test)"), key="tail_f")
-        test_stat_f = st.number_input("Calculated F-statistic", value=1.0, format="%.3f", min_value=0.001, key="test_stat_f") # F must be > 0
+        test_stat_f = st.number_input("Calculated F-statistic", value=1.0, format="%.3f", min_value=0.001, key="test_stat_f")
 
         st.subheader("Distribution Plot")
         fig_f, ax_f = plt.subplots(figsize=(8,5))
         
         plot_min_f = 0.001
         plot_max_f = max(stats.f.ppf(0.999, dfn_f, dfd_f), test_stat_f * 1.5, 5.0)
-        if test_stat_f > stats.f.ppf(0.999, dfn_f, dfd_f) * 1.2 : # ensure test_stat is visible
+        if test_stat_f > stats.f.ppf(0.999, dfn_f, dfd_f) * 1.2 : 
              plot_max_f = test_stat_f * 1.2
 
         x_f = np.linspace(plot_min_f, plot_max_f, 500)
@@ -442,16 +433,16 @@ def tab_f_distribution():
             crit_val_f_upper = stats.f.ppf(1 - alpha_f, dfn_f, dfd_f)
             x_fill_upper = np.linspace(crit_val_f_upper, plot_max_f, 100)
             ax_f.fill_between(x_fill_upper, stats.f.pdf(x_fill_upper, dfn_f, dfd_f), color='red', alpha=0.5, label=f'α = {alpha_f:.4f}')
-            if crit_val_f_upper is not None: ax_f.axvline(crit_val_f_upper, color='red', linestyle='--', lw=1)
-        else: # Two-tailed (for variance test)
+            if crit_val_f_upper is not None and not np.isnan(crit_val_f_upper): ax_f.axvline(crit_val_f_upper, color='red', linestyle='--', lw=1)
+        else: 
             crit_val_f_upper = stats.f.ppf(1 - alpha_f / 2, dfn_f, dfd_f)
             crit_val_f_lower = stats.f.ppf(alpha_f / 2, dfn_f, dfd_f)
             x_fill_upper = np.linspace(crit_val_f_upper, plot_max_f, 100)
             x_fill_lower = np.linspace(plot_min_f, crit_val_f_lower, 100)
             ax_f.fill_between(x_fill_upper, stats.f.pdf(x_fill_upper, dfn_f, dfd_f), color='red', alpha=0.5, label=f'α/2 = {alpha_f/2:.4f}')
             ax_f.fill_between(x_fill_lower, stats.f.pdf(x_fill_lower, dfn_f, dfd_f), color='red', alpha=0.5)
-            if crit_val_f_upper is not None: ax_f.axvline(crit_val_f_upper, color='red', linestyle='--', lw=1)
-            if crit_val_f_lower is not None: ax_f.axvline(crit_val_f_lower, color='red', linestyle='--', lw=1)
+            if crit_val_f_upper is not None and not np.isnan(crit_val_f_upper): ax_f.axvline(crit_val_f_upper, color='red', linestyle='--', lw=1)
+            if crit_val_f_lower is not None and not np.isnan(crit_val_f_lower): ax_f.axvline(crit_val_f_lower, color='red', linestyle='--', lw=1)
 
 
         ax_f.axvline(test_stat_f, color='green', linestyle='-', lw=2, label=f'Test Stat = {test_stat_f:.3f}')
@@ -467,7 +458,7 @@ def tab_f_distribution():
         alphas_table_f_list = sorted(list(set(a for a in alphas_table_f_list if 0.00005 < a < 0.50005)))
         
         table_data_f_list = []
-        for a_val_one_tail in alphas_table_f_list: # these are for one tail (or alpha/2 for two-tail)
+        for a_val_one_tail in alphas_table_f_list: 
             cv_upper = stats.f.ppf(1 - a_val_one_tail, dfn_f, dfd_f)
             cv_lower = stats.f.ppf(a_val_one_tail, dfn_f, dfd_f)
             table_data_f_list.append({
@@ -483,7 +474,7 @@ def tab_f_distribution():
             if tail_f == "Two-tailed (for variance test)":
                 if abs(current_alpha_in_table - (alpha_f / 2)) < 1e-5 :
                     highlight = True
-            else: # One-tailed
+            else: 
                 if abs(current_alpha_in_table - alpha_f) < 1e-5:
                     highlight = True
             return ['background-color: yellow'] * len(row) if highlight else [''] * len(row)
@@ -517,15 +508,15 @@ def tab_f_distribution():
         p_val_for_crit_val_f_display = alpha_f
 
         if tail_f == "One-tailed (right)":
-            crit_val_f_display = f"{crit_val_f_upper:.3f}" if crit_val_f_upper is not None else "N/A"
+            crit_val_f_display = f"{crit_val_f_upper:.3f}" if crit_val_f_upper is not None and not np.isnan(crit_val_f_upper) else "N/A"
             p_val_calc_f = p_val_f_one_right
-            decision_crit_f = test_stat_f > crit_val_f_upper if crit_val_f_upper is not None else False
+            decision_crit_f = test_stat_f > crit_val_f_upper if crit_val_f_upper is not None and not np.isnan(crit_val_f_upper) else False
             comparison_crit_str_f = f"{test_stat_f:.3f} > {crit_val_f_upper:.3f}" if decision_crit_f else f"{test_stat_f:.3f} ≤ {crit_val_f_upper:.3f}"
-        else: # Two-tailed
-            crit_val_f_display = f"Lower: {crit_val_f_lower:.3f}, Upper: {crit_val_f_upper:.3f}" if crit_val_f_lower is not None and crit_val_f_upper is not None else "N/A"
+        else: 
+            crit_val_f_display = f"Lower: {crit_val_f_lower:.3f}, Upper: {crit_val_f_upper:.3f}" if crit_val_f_lower is not None and not np.isnan(crit_val_f_lower) and crit_val_f_upper is not None and not np.isnan(crit_val_f_upper) else "N/A"
             p_val_calc_f = p_val_f_two
-            decision_crit_f = (test_stat_f > crit_val_f_upper if crit_val_f_upper is not None else False) or \
-                              (test_stat_f < crit_val_f_lower if crit_val_f_lower is not None else False)
+            decision_crit_f = (test_stat_f > crit_val_f_upper if crit_val_f_upper is not None and not np.isnan(crit_val_f_upper) else False) or \
+                              (test_stat_f < crit_val_f_lower if crit_val_f_lower is not None and not np.isnan(crit_val_f_lower) else False)
             comparison_crit_str_f = f"{test_stat_f:.3f} > {crit_val_f_upper:.3f} or {test_stat_f:.3f} < {crit_val_f_lower:.3f}" if decision_crit_f else f"{crit_val_f_lower:.3f} ≤ {test_stat_f:.3f} ≤ {crit_val_f_upper:.3f}"
 
 
@@ -554,7 +545,7 @@ def tab_chi_square_distribution():
         alpha_chi2 = st.number_input("Alpha (α)", 0.0001, 0.5, 0.05, 0.0001, format="%.4f", key="alpha_chi2")
         df_chi2 = st.number_input("Degrees of Freedom (df)", 1, 1000, 5, 1, key="df_chi2")
         tail_chi2 = st.radio("Tail Selection", ("One-tailed (right)", "Two-tailed (e.g. for variance)"), key="tail_chi2")
-        test_stat_chi2 = st.number_input("Calculated χ²-statistic", value=float(df_chi2), format="%.3f", min_value=0.001, key="test_stat_chi2") # chi2 must be > 0
+        test_stat_chi2 = st.number_input("Calculated χ²-statistic", value=float(df_chi2), format="%.3f", min_value=0.001, key="test_stat_chi2")
 
         st.subheader("Distribution Plot")
         fig_chi2, ax_chi2 = plt.subplots(figsize=(8,5))
@@ -575,16 +566,16 @@ def tab_chi_square_distribution():
             crit_val_chi2_upper = stats.chi2.ppf(1 - alpha_chi2, df_chi2)
             x_fill_upper = np.linspace(crit_val_chi2_upper, plot_max_chi2, 100)
             ax_chi2.fill_between(x_fill_upper, stats.chi2.pdf(x_fill_upper, df_chi2), color='red', alpha=0.5, label=f'α = {alpha_chi2:.4f}')
-            if crit_val_chi2_upper is not None: ax_chi2.axvline(crit_val_chi2_upper, color='red', linestyle='--', lw=1)
-        else: # Two-tailed
+            if crit_val_chi2_upper is not None and not np.isnan(crit_val_chi2_upper): ax_chi2.axvline(crit_val_chi2_upper, color='red', linestyle='--', lw=1)
+        else: 
             crit_val_chi2_upper = stats.chi2.ppf(1 - alpha_chi2 / 2, df_chi2)
             crit_val_chi2_lower = stats.chi2.ppf(alpha_chi2 / 2, df_chi2)
             x_fill_upper_chi2 = np.linspace(crit_val_chi2_upper, plot_max_chi2, 100)
             x_fill_lower_chi2 = np.linspace(plot_min_chi2, crit_val_chi2_lower, 100)
             ax_chi2.fill_between(x_fill_upper_chi2, stats.chi2.pdf(x_fill_upper_chi2, df_chi2), color='red', alpha=0.5, label=f'α/2 = {alpha_chi2/2:.4f}')
             ax_chi2.fill_between(x_fill_lower_chi2, stats.chi2.pdf(x_fill_lower_chi2, df_chi2), color='red', alpha=0.5)
-            if crit_val_chi2_upper is not None: ax_chi2.axvline(crit_val_chi2_upper, color='red', linestyle='--', lw=1)
-            if crit_val_chi2_lower is not None: ax_chi2.axvline(crit_val_chi2_lower, color='red', linestyle='--', lw=1)
+            if crit_val_chi2_upper is not None and not np.isnan(crit_val_chi2_upper): ax_chi2.axvline(crit_val_chi2_upper, color='red', linestyle='--', lw=1)
+            if crit_val_chi2_lower is not None and not np.isnan(crit_val_chi2_lower): ax_chi2.axvline(crit_val_chi2_lower, color='red', linestyle='--', lw=1)
 
 
         ax_chi2.axvline(test_stat_chi2, color='green', linestyle='-', lw=2, label=f'Test Stat = {test_stat_chi2:.3f}')
@@ -600,7 +591,7 @@ def tab_chi_square_distribution():
         alphas_table_chi2_list = sorted(list(set(a for a in alphas_table_chi2_list if 0.00005 < a < 0.50005)))
 
         table_data_chi2_list = []
-        for a_val_one_tail in alphas_table_chi2_list: # these are for one tail (or alpha/2 for two-tail)
+        for a_val_one_tail in alphas_table_chi2_list: 
             cv_upper = stats.chi2.ppf(1 - a_val_one_tail, df_chi2)
             cv_lower = stats.chi2.ppf(a_val_one_tail, df_chi2)
             table_data_chi2_list.append({
@@ -616,7 +607,7 @@ def tab_chi_square_distribution():
             if tail_chi2 == "Two-tailed (e.g. for variance)":
                 if abs(current_alpha_in_table - (alpha_chi2 / 2)) < 1e-5 :
                     highlight = True
-            else: # One-tailed
+            else: 
                 if abs(current_alpha_in_table - alpha_chi2) < 1e-5:
                     highlight = True
             return ['background-color: yellow'] * len(row) if highlight else [''] * len(row)
@@ -649,15 +640,15 @@ def tab_chi_square_distribution():
         p_val_for_crit_val_chi2_display = alpha_chi2
 
         if tail_chi2 == "One-tailed (right)":
-            crit_val_chi2_display = f"{crit_val_chi2_upper:.3f}" if crit_val_chi2_upper is not None else "N/A"
+            crit_val_chi2_display = f"{crit_val_chi2_upper:.3f}" if crit_val_chi2_upper is not None and not np.isnan(crit_val_chi2_upper) else "N/A"
             p_val_calc_chi2 = p_val_chi2_one_right
-            decision_crit_chi2 = test_stat_chi2 > crit_val_chi2_upper if crit_val_chi2_upper is not None else False
+            decision_crit_chi2 = test_stat_chi2 > crit_val_chi2_upper if crit_val_chi2_upper is not None and not np.isnan(crit_val_chi2_upper) else False
             comparison_crit_str_chi2 = f"{test_stat_chi2:.3f} > {crit_val_chi2_upper:.3f}" if decision_crit_chi2 else f"{test_stat_chi2:.3f} ≤ {crit_val_chi2_upper:.3f}"
-        else: # Two-tailed
-            crit_val_chi2_display = f"Lower: {crit_val_chi2_lower:.3f}, Upper: {crit_val_chi2_upper:.3f}" if crit_val_chi2_lower is not None and crit_val_chi2_upper is not None else "N/A"
+        else: 
+            crit_val_chi2_display = f"Lower: {crit_val_chi2_lower:.3f}, Upper: {crit_val_chi2_upper:.3f}" if crit_val_chi2_lower is not None and not np.isnan(crit_val_chi2_lower) and crit_val_chi2_upper is not None and not np.isnan(crit_val_chi2_upper) else "N/A"
             p_val_calc_chi2 = p_val_chi2_two
-            decision_crit_chi2 = (test_stat_chi2 > crit_val_chi2_upper if crit_val_chi2_upper is not None else False) or \
-                                 (test_stat_chi2 < crit_val_chi2_lower if crit_val_chi2_lower is not None else False)
+            decision_crit_chi2 = (test_stat_chi2 > crit_val_chi2_upper if crit_val_chi2_upper is not None and not np.isnan(crit_val_chi2_upper) else False) or \
+                                 (test_stat_chi2 < crit_val_chi2_lower if crit_val_chi2_lower is not None and not np.isnan(crit_val_chi2_lower) else False)
             comparison_crit_str_chi2 = f"{test_stat_chi2:.3f} > {crit_val_chi2_upper:.3f} or {test_stat_chi2:.3f} < {crit_val_chi2_lower:.3f}" if decision_crit_chi2 else f"{crit_val_chi2_lower:.3f} ≤ {test_stat_chi2:.3f} ≤ {crit_val_chi2_upper:.3f}"
 
         decision_p_alpha_chi2 = p_val_calc_chi2 < alpha_chi2
@@ -683,8 +674,8 @@ def tab_mann_whitney_u():
     with col1:
         st.subheader("Inputs")
         alpha_mw = st.number_input("Alpha (α)", 0.0001, 0.5, 0.05, 0.0001, format="%.4f", key="alpha_mw")
-        n1_mw = st.number_input("Sample Size Group 1 (n1)", 1, 1000, 10, 1, key="n1_mw") # Allow n=1 for edge cases, though approx is bad
-        n2_mw = st.number_input("Sample Size Group 2 (n2)", 1, 1000, 12, 1, key="n2_mw") # Allow n=1
+        n1_mw = st.number_input("Sample Size Group 1 (n1)", 1, 1000, 10, 1, key="n1_mw") 
+        n2_mw = st.number_input("Sample Size Group 2 (n2)", 1, 1000, 12, 1, key="n2_mw") 
         tail_mw = st.radio("Tail Selection", ("Two-tailed", "One-tailed (right)", "One-tailed (left)"), key="tail_mw")
         u_stat_mw = st.number_input("Calculated U-statistic", value=float(n1_mw*n2_mw/2), format="%.1f", min_value=0.0, max_value=float(n1_mw*n2_mw), key="u_stat_mw")
         st.caption("Note: Normal approximation is best for n1, n2 > ~10. U is typically the smaller of U1 or U2.")
@@ -695,14 +686,13 @@ def tab_mann_whitney_u():
         
         z_calc_mw = 0.0
         if sigma_u > 0:
-            # Apply continuity correction
             if u_stat_mw < mu_u:
                 z_calc_mw = (u_stat_mw + 0.5 - mu_u) / sigma_u
             elif u_stat_mw > mu_u:
                 z_calc_mw = (u_stat_mw - 0.5 - mu_u) / sigma_u
-            else: # u_stat_mw == mu_u
+            else: 
                 z_calc_mw = 0.0 
-        else: # sigma_u is 0, avoid division by zero (e.g., if n1 or n2 is 0, though inputs prevent that)
+        else: 
             z_calc_mw = 0.0
             if n1_mw > 0 and n2_mw > 0: st.warning("Standard deviation (σ_U) is zero. Check sample sizes. z_calc set to 0.")
 
@@ -731,18 +721,18 @@ def tab_mann_whitney_u():
             x_fill_lower_mw = np.linspace(plot_min_z_mw, crit_z_lower_mw, 100)
             ax_mw.fill_between(x_fill_upper_mw, stats.norm.pdf(x_fill_upper_mw), color='red', alpha=0.5, label=f'α/2 = {alpha_mw/2:.4f}')
             ax_mw.fill_between(x_fill_lower_mw, stats.norm.pdf(x_fill_lower_mw), color='red', alpha=0.5)
-            if crit_z_upper_mw is not None: ax_mw.axvline(crit_z_upper_mw, color='red', linestyle='--', lw=1)
-            if crit_z_lower_mw is not None: ax_mw.axvline(crit_z_lower_mw, color='red', linestyle='--', lw=1)
+            if crit_z_upper_mw is not None and not np.isnan(crit_z_upper_mw): ax_mw.axvline(crit_z_upper_mw, color='red', linestyle='--', lw=1)
+            if crit_z_lower_mw is not None and not np.isnan(crit_z_lower_mw): ax_mw.axvline(crit_z_lower_mw, color='red', linestyle='--', lw=1)
         elif tail_mw == "One-tailed (right)":
             crit_z_upper_mw = stats.norm.ppf(1 - alpha_mw)
             x_fill_upper_mw = np.linspace(crit_z_upper_mw, plot_max_z_mw, 100)
             ax_mw.fill_between(x_fill_upper_mw, stats.norm.pdf(x_fill_upper_mw), color='red', alpha=0.5, label=f'α = {alpha_mw:.4f}')
-            if crit_z_upper_mw is not None: ax_mw.axvline(crit_z_upper_mw, color='red', linestyle='--', lw=1)
-        else: # One-tailed (left)
+            if crit_z_upper_mw is not None and not np.isnan(crit_z_upper_mw): ax_mw.axvline(crit_z_upper_mw, color='red', linestyle='--', lw=1)
+        else: 
             crit_z_lower_mw = stats.norm.ppf(alpha_mw)
             x_fill_lower_mw = np.linspace(plot_min_z_mw, crit_z_lower_mw, 100)
             ax_mw.fill_between(x_fill_lower_mw, stats.norm.pdf(x_fill_lower_mw), color='red', alpha=0.5, label=f'α = {alpha_mw:.4f}')
-            if crit_z_lower_mw is not None: ax_mw.axvline(crit_z_lower_mw, color='red', linestyle='--', lw=1)
+            if crit_z_lower_mw is not None and not np.isnan(crit_z_lower_mw): ax_mw.axvline(crit_z_lower_mw, color='red', linestyle='--', lw=1)
 
         ax_mw.axvline(z_calc_mw, color='green', linestyle='-', lw=2, label=f'z_calc = {z_calc_mw:.3f}')
         ax_mw.set_title('Normal Approx. for Mann-Whitney U: Critical z Region(s)')
@@ -753,7 +743,6 @@ def tab_mann_whitney_u():
         st.pyplot(fig_mw)
 
         st.subheader("Critical z-Value Table Snippet (for U test's z_calc)")
-        # Using the same table structure as z-distribution tab
         alphas_table_z_mw_list = [0.10, 0.05, 0.025, 0.01, 0.005, alpha_mw, alpha_mw/2 if tail_mw == "Two-tailed" else alpha_mw]
         alphas_table_z_mw_list = sorted(list(set(a for a in alphas_table_z_mw_list if 0.00005 < a < 0.50005)))
         
@@ -770,7 +759,7 @@ def tab_mann_whitney_u():
             })
         df_table_z_mw = pd.DataFrame(table_data_z_mw_list)
         
-        def highlight_alpha_row_z_mw(row): # Same highlighting logic as z-tab
+        def highlight_alpha_row_z_mw(row): 
             highlight = False
             if tail_mw == "Two-tailed":
                 if abs(float(row["α (One-Tail)"]) - (alpha_mw / 2)) < 1e-5 :
@@ -792,8 +781,8 @@ def tab_mann_whitney_u():
         st.markdown(f"""
         The U statistic ({u_stat_mw:.1f}) is converted to a z-statistic ({z_calc_mw:.3f}) using μ<sub>U</sub>={mu_u:.2f}, σ<sub>U</sub>={sigma_u:.2f} (with continuity correction). The p-value is from the standard normal distribution based on this z_calc_mw.
         * **Two-tailed**: `2 * P(Z ≥ |{z_calc_mw:.3f}|)`
-        * **One-tailed (right)**: `P(Z ≥ {z_calc_mw:.3f})` (Used if H1: group 1 > group 2 and U is defined as n1n2 + n2(n2+1)/2 - R2, or similar, resulting in a positive z for significance).
-        * **One-tailed (left)**: `P(Z ≤ {z_calc_mw:.3f})` (Used if H1: group 1 < group 2 and U is defined as above, or if U is the smaller of U1, U2 and H1 matches).
+        * **One-tailed (right)**: `P(Z ≥ {z_calc_mw:.3f})` 
+        * **One-tailed (left)**: `P(Z ≤ {z_calc_mw:.3f})` 
         The interpretation of "right" and "left" for U depends on definition of U and H1. This explorer assumes z_calc_mw directionality matches tail selection for p-value.
         """)
 
@@ -807,19 +796,19 @@ def tab_mann_whitney_u():
         p_val_for_crit_val_mw_display = alpha_mw
 
         if tail_mw == "Two-tailed":
-            crit_val_z_display_mw = f"±{crit_z_upper_mw:.3f}" if crit_z_upper_mw is not None else "N/A"
+            crit_val_z_display_mw = f"±{crit_z_upper_mw:.3f}" if crit_z_upper_mw is not None and not np.isnan(crit_z_upper_mw) else "N/A"
             p_val_calc_mw = p_val_mw_two
-            decision_crit_mw = abs(z_calc_mw) > crit_z_upper_mw if crit_z_upper_mw is not None else False
+            decision_crit_mw = abs(z_calc_mw) > crit_z_upper_mw if crit_z_upper_mw is not None and not np.isnan(crit_z_upper_mw) else False
             comparison_crit_str_mw = f"|z_calc| ({abs(z_calc_mw):.3f}) > {crit_z_upper_mw:.3f}" if decision_crit_mw else f"|z_calc| ({abs(z_calc_mw):.3f}) ≤ {crit_z_upper_mw:.3f}"
         elif tail_mw == "One-tailed (right)":
-            crit_val_z_display_mw = f"{crit_z_upper_mw:.3f}" if crit_z_upper_mw is not None else "N/A"
+            crit_val_z_display_mw = f"{crit_z_upper_mw:.3f}" if crit_z_upper_mw is not None and not np.isnan(crit_z_upper_mw) else "N/A"
             p_val_calc_mw = p_val_mw_one_right
-            decision_crit_mw = z_calc_mw > crit_z_upper_mw if crit_z_upper_mw is not None else False
+            decision_crit_mw = z_calc_mw > crit_z_upper_mw if crit_z_upper_mw is not None and not np.isnan(crit_z_upper_mw) else False
             comparison_crit_str_mw = f"z_calc ({z_calc_mw:.3f}) > {crit_z_upper_mw:.3f}" if decision_crit_mw else f"z_calc ({z_calc_mw:.3f}) ≤ {crit_z_upper_mw:.3f}"
-        else: # One-tailed (left)
-            crit_val_z_display_mw = f"{crit_z_lower_mw:.3f}" if crit_z_lower_mw is not None else "N/A"
+        else: 
+            crit_val_z_display_mw = f"{crit_z_lower_mw:.3f}" if crit_z_lower_mw is not None and not np.isnan(crit_z_lower_mw) else "N/A"
             p_val_calc_mw = p_val_mw_one_left
-            decision_crit_mw = z_calc_mw < crit_z_lower_mw if crit_z_lower_mw is not None else False
+            decision_crit_mw = z_calc_mw < crit_z_lower_mw if crit_z_lower_mw is not None and not np.isnan(crit_z_lower_mw) else False
             comparison_crit_str_mw = f"z_calc ({z_calc_mw:.3f}) < {crit_z_lower_mw:.3f}" if decision_crit_mw else f"z_calc ({z_calc_mw:.3f}) ≥ {crit_z_lower_mw:.3f}"
 
         decision_p_alpha_mw = p_val_calc_mw < alpha_mw
@@ -846,7 +835,7 @@ def tab_wilcoxon_t():
     with col1:
         st.subheader("Inputs")
         alpha_w = st.number_input("Alpha (α)", 0.0001, 0.5, 0.05, 0.0001, format="%.4f", key="alpha_w")
-        n_w = st.number_input("Sample Size (n, non-zero differences)", 1, 1000, 15, 1, key="n_w") # Allow n=1
+        n_w = st.number_input("Sample Size (n, non-zero differences)", 1, 1000, 15, 1, key="n_w") 
         tail_w = st.radio("Tail Selection", ("Two-tailed", "One-tailed (right)", "One-tailed (left)"), key="tail_w")
         t_stat_w = st.number_input("Calculated T-statistic (sum of ranks)", value=float(n_w*(n_w+1)/4 / 2 if n_w >0 else 0), format="%.1f", min_value=0.0, max_value=float(n_w*(n_w+1)/2 if n_w > 0 else 0), key="t_stat_w")
         st.caption("Note: Normal approximation best for n > ~15-20. T is usually the smaller of T+ or T- for two-tailed tests.")
@@ -857,12 +846,11 @@ def tab_wilcoxon_t():
         
         z_calc_w = 0.0
         if sigma_t_w > 0:
-            # Apply continuity correction
-            if t_stat_w < mu_t_w: # If T is smaller than expected
+            if t_stat_w < mu_t_w: 
                 z_calc_w = (t_stat_w + 0.5 - mu_t_w) / sigma_t_w
-            elif t_stat_w > mu_t_w: # If T is larger than expected
+            elif t_stat_w > mu_t_w: 
                 z_calc_w = (t_stat_w - 0.5 - mu_t_w) / sigma_t_w
-            else: # t_stat_w == mu_t_w
+            else: 
                 z_calc_w = 0.0
         else:
             z_calc_w = 0.0
@@ -893,18 +881,18 @@ def tab_wilcoxon_t():
             x_fill_lower_w = np.linspace(plot_min_z_w, crit_z_lower_w, 100)
             ax_w.fill_between(x_fill_upper_w, stats.norm.pdf(x_fill_upper_w), color='red', alpha=0.5, label=f'α/2 = {alpha_w/2:.4f}')
             ax_w.fill_between(x_fill_lower_w, stats.norm.pdf(x_fill_lower_w), color='red', alpha=0.5)
-            if crit_z_upper_w is not None: ax_w.axvline(crit_z_upper_w, color='red', linestyle='--', lw=1)
-            if crit_z_lower_w is not None: ax_w.axvline(crit_z_lower_w, color='red', linestyle='--', lw=1)
+            if crit_z_upper_w is not None and not np.isnan(crit_z_upper_w): ax_w.axvline(crit_z_upper_w, color='red', linestyle='--', lw=1)
+            if crit_z_lower_w is not None and not np.isnan(crit_z_lower_w): ax_w.axvline(crit_z_lower_w, color='red', linestyle='--', lw=1)
         elif tail_w == "One-tailed (right)": 
             crit_z_upper_w = stats.norm.ppf(1 - alpha_w)
             x_fill_upper_w = np.linspace(crit_z_upper_w, plot_max_z_w, 100)
             ax_w.fill_between(x_fill_upper_w, stats.norm.pdf(x_fill_upper_w), color='red', alpha=0.5, label=f'α = {alpha_w:.4f}')
-            if crit_z_upper_w is not None: ax_w.axvline(crit_z_upper_w, color='red', linestyle='--', lw=1)
+            if crit_z_upper_w is not None and not np.isnan(crit_z_upper_w): ax_w.axvline(crit_z_upper_w, color='red', linestyle='--', lw=1)
         else: 
             crit_z_lower_w = stats.norm.ppf(alpha_w)
             x_fill_lower_w = np.linspace(plot_min_z_w, crit_z_lower_w, 100)
             ax_w.fill_between(x_fill_lower_w, stats.norm.pdf(x_fill_lower_w), color='red', alpha=0.5, label=f'α = {alpha_w:.4f}')
-            if crit_z_lower_w is not None: ax_w.axvline(crit_z_lower_w, color='red', linestyle='--', lw=1)
+            if crit_z_lower_w is not None and not np.isnan(crit_z_lower_w): ax_w.axvline(crit_z_lower_w, color='red', linestyle='--', lw=1)
 
         ax_w.axvline(z_calc_w, color='green', linestyle='-', lw=2, label=f'z_calc = {z_calc_w:.3f}')
         ax_w.set_title('Normal Approx. for Wilcoxon T: Critical z Region(s)')
@@ -931,7 +919,7 @@ def tab_wilcoxon_t():
             })
         df_table_z_w = pd.DataFrame(table_data_z_w_list)
         
-        def highlight_alpha_row_z_w(row): # Same highlighting logic as z-tab
+        def highlight_alpha_row_z_w(row): 
             highlight = False
             if tail_w == "Two-tailed":
                 if abs(float(row["α (One-Tail)"]) - (alpha_w / 2)) < 1e-5 :
@@ -952,22 +940,13 @@ def tab_wilcoxon_t():
         st.subheader("P-value Calculation Explanation")
         st.markdown(f"""
         The T statistic ({t_stat_w:.1f}) is converted to z ({z_calc_w:.3f}) using μ<sub>T</sub>={mu_t_w:.2f}, σ<sub>T</sub>={sigma_t_w:.2f} (with continuity correction). P-value from normal distribution.
-        * **Two-tailed**: `2 * P(Z ≥ |{z_calc_w:.3f}|)` (if T is smaller rank sum, z_calc_w may be negative, then `2 * P(Z ≤ z_calc_w)`)
-        * **One-tailed (right)**: `P(Z ≥ {z_calc_w:.3f})` (if H1: median diff > 0, T = T_pos, z_calc_w should be positive)
-        * **One-tailed (left)**: `P(Z ≤ {z_calc_w:.3f})` (if H1: median diff < 0, T = T_pos is small, z_calc_w should be negative)
+        * **Two-tailed**: `2 * P(Z ≥ |{z_calc_w:.3f}|)` 
+        * **One-tailed (right)**: `P(Z ≥ {z_calc_w:.3f})` 
+        * **One-tailed (left)**: `P(Z ≤ {z_calc_w:.3f})` 
         This explorer uses the calculated z_calc_w's sign to determine the p-value for one-tailed tests.
         """)
 
         st.subheader("Summary")
-        # For Wilcoxon, a smaller T statistic (sum of ranks) is generally more significant.
-        # If T is the sum of ranks of positive differences:
-        #   H1: median diff > 0  => expect T to be large => right-tailed test on z_calc_w
-        #   H1: median diff < 0  => expect T to be small => left-tailed test on z_calc_w
-        # If T is the smaller of T+ and T-:
-        #   For a two-tailed test, p = 2 * P(Wilcoxon T <= observed T_small)
-        #   This translates to z_calc_w being negative if T_calc is small.
-        #   So for two-tailed, p = 2 * cdf(z_calc_w) if z_calc_w is based on the smaller T.
-        # The current z_calc_w can be positive or negative.
         
         p_val_w_one_right_tail_on_z = stats.norm.sf(z_calc_w) 
         p_val_w_one_left_tail_on_z = stats.norm.cdf(z_calc_w)  
@@ -979,19 +958,19 @@ def tab_wilcoxon_t():
         p_val_for_crit_val_w_display = alpha_w
 
         if tail_w == "Two-tailed":
-            crit_val_z_display_w = f"±{crit_z_upper_w:.3f}" if crit_z_upper_w is not None else "N/A"
+            crit_val_z_display_w = f"±{crit_z_upper_w:.3f}" if crit_z_upper_w is not None and not np.isnan(crit_z_upper_w) else "N/A"
             p_val_calc_w = p_val_w_two_tail_on_z
-            decision_crit_w = abs(z_calc_w) > crit_z_upper_w if crit_z_upper_w is not None else False
+            decision_crit_w = abs(z_calc_w) > crit_z_upper_w if crit_z_upper_w is not None and not np.isnan(crit_z_upper_w) else False
             comparison_crit_str_w = f"|z_calc| ({abs(z_calc_w):.3f}) > {crit_z_upper_w:.3f}" if decision_crit_w else f"|z_calc| ({abs(z_calc_w):.3f}) ≤ {crit_z_upper_w:.3f}"
         elif tail_w == "One-tailed (right)": 
-            crit_val_z_display_w = f"{crit_z_upper_w:.3f}" if crit_z_upper_w is not None else "N/A"
-            p_val_calc_w = p_val_w_one_right_tail_on_z # Test if z_calc is in the right tail
-            decision_crit_w = z_calc_w > crit_z_upper_w if crit_z_upper_w is not None else False
+            crit_val_z_display_w = f"{crit_z_upper_w:.3f}" if crit_z_upper_w is not None and not np.isnan(crit_z_upper_w) else "N/A"
+            p_val_calc_w = p_val_w_one_right_tail_on_z 
+            decision_crit_w = z_calc_w > crit_z_upper_w if crit_z_upper_w is not None and not np.isnan(crit_z_upper_w) else False
             comparison_crit_str_w = f"z_calc ({z_calc_w:.3f}) > {crit_z_upper_w:.3f}" if decision_crit_w else f"z_calc ({z_calc_w:.3f}) ≤ {crit_z_upper_w:.3f}"
-        else: # One-tailed (left)
-            crit_val_z_display_w = f"{crit_z_lower_w:.3f}" if crit_z_lower_w is not None else "N/A"
-            p_val_calc_w = p_val_w_one_left_tail_on_z # Test if z_calc is in the left tail
-            decision_crit_w = z_calc_w < crit_z_lower_w if crit_z_lower_w is not None else False
+        else: 
+            crit_val_z_display_w = f"{crit_z_lower_w:.3f}" if crit_z_lower_w is not None and not np.isnan(crit_z_lower_w) else "N/A"
+            p_val_calc_w = p_val_w_one_left_tail_on_z 
+            decision_crit_w = z_calc_w < crit_z_lower_w if crit_z_lower_w is not None and not np.isnan(crit_z_lower_w) else False
             comparison_crit_str_w = f"z_calc ({z_calc_w:.3f}) < {crit_z_lower_w:.3f}" if decision_crit_w else f"z_calc ({z_calc_w:.3f}) ≥ {crit_z_lower_w:.3f}"
 
         decision_p_alpha_w = p_val_calc_w < alpha_w
@@ -1022,7 +1001,6 @@ def tab_binomial_test():
         p_null_b = st.number_input("Null Hypothesis Probability (p₀)", 0.00, 1.00, 0.5, 0.01, format="%.2f", key="p_null_b")
         k_success_b = st.number_input("Number of Successes (k)", 0, n_b, int(n_b * p_null_b), 1, key="k_success_b")
         
-        # Dynamic tail selection labels
         tail_options_b = {
             f"Two-tailed (p ≠ {p_null_b})": "two-sided",
             f"One-tailed (right, p > {p_null_b})": "greater",
@@ -1042,21 +1020,13 @@ def tab_binomial_test():
         
         ax_b.scatter([k_success_b], [stats.binom.pmf(k_success_b, n_b, p_null_b)], color='green', s=100, zorder=5, label=f'Observed k = {k_success_b}')
         
-        # Illustrative critical region highlighting (more complex for discrete)
-        # For a two-sided test, we sum probabilities of outcomes equally or less likely than observed k
-        # For one-sided, it's straightforward CDF/SF
-        
-        # Calculate exact p-value first
         if tail_b_scipy == "two-sided":
-            # Sum probabilities P(X=i) for all i where P(X=i) <= P(X=k_success_b)
-            # This is complex to visualize directly as a simple cutoff.
-            # We can show k_success_b and its probability.
-            pass # No simple critical k for shading for two-sided exact
-        elif tail_b_scipy == "greater": # One-tailed right
+            pass 
+        elif tail_b_scipy == "greater": 
             crit_region_indices = x_b[x_b >= k_success_b]
             if len(crit_region_indices) > 0 :
                  ax_b.bar(crit_region_indices, y_b_pmf[crit_region_indices], color='salmon', alpha=0.6, label=f'P(X ≥ {k_success_b})')
-        elif tail_b_scipy == "less": # One-tailed left
+        elif tail_b_scipy == "less": 
             crit_region_indices = x_b[x_b <= k_success_b]
             if len(crit_region_indices) > 0:
                 ax_b.bar(crit_region_indices, y_b_pmf[crit_region_indices], color='salmon', alpha=0.6, label=f'P(X ≤ {k_success_b})')
@@ -1070,7 +1040,6 @@ def tab_binomial_test():
         st.pyplot(fig_b)
 
         st.subheader("Probability Table Snippet")
-        # Show a few k values around the observed k
         k_start_table = max(0, k_success_b - 3)
         k_end_table = min(n_b, k_success_b + 3)
         k_range_table = np.arange(k_start_table, k_end_table + 1)
@@ -1105,46 +1074,35 @@ def tab_binomial_test():
         st.subheader("P-value Calculation Explanation")
         st.markdown(f"""
         The p-value for a binomial test is the probability of observing k={k_success_b} successes, or results more extreme, given n={n_b} trials and null probability p₀={p_null_b}.
-        * **Two-tailed (p ≠ {p_null_b})**: Sum of P(X=i) for all i where P(X=i) ≤ P(X={k_success_b}). This is often calculated as `2 * min(P(X ≤ k), P(X ≥ k))` if the distribution under H0 were symmetric, but for binomial, it's better to sum the probabilities of all outcomes at least as "unlikely" as the observed k. `scipy.stats.binomtest` does this.
+        * **Two-tailed (p ≠ {p_null_b})**: Sum of P(X=i) for all i where P(X=i) ≤ P(X={k_success_b}).
         * **One-tailed (right, p > {p_null_b})**: `P(X ≥ {k_success_b}) = stats.binom.sf({k_success_b}-1, n_b, p_null_b)`
         * **One-tailed (left, p < {p_null_b})**: `P(X ≤ {k_success_b}) = stats.binom.cdf({k_success_b}, n_b, p_null_b)`
         """)
 
         st.subheader("Summary")
-        # Use scipy.stats.binomtest for accurate p-value, especially for two-sided
-        # However, to stick to the prompt's explicit use of pmf, cdf, sf:
         p_val_b_one_left = stats.binom.cdf(k_success_b, n_b, p_null_b)
-        p_val_b_one_right = stats.binom.sf(k_success_b - 1, n_b, p_null_b) # P(X >= k) = sf(k-1) or 1 - cdf(k-1)
+        p_val_b_one_right = stats.binom.sf(k_success_b - 1, n_b, p_null_b) 
 
         if tail_b_scipy == "two-sided":
-            # A common method for two-sided p-value for discrete distributions:
-            # Sum all probabilities P(X=i) that are less than or equal to P(X=observed_k)
             p_observed_k = stats.binom.pmf(k_success_b, n_b, p_null_b)
-            p_val_b_two = 0
+            p_val_calc_b = 0
             for i in range(n_b + 1):
-                if stats.binom.pmf(i, n_b, p_null_b) <= p_observed_k + 1e-9: # Add tolerance for float comparison
-                    p_val_b_two += stats.binom.pmf(i, n_b, p_null_b)
-            p_val_b_two = min(p_val_b_two, 1.0) # Cap at 1.0
+                if stats.binom.pmf(i, n_b, p_null_b) <= p_observed_k + 1e-9: 
+                    p_val_calc_b += stats.binom.pmf(i, n_b, p_null_b)
+            p_val_calc_b = min(p_val_calc_b, 1.0) 
         elif tail_b_scipy == "greater":
-            p_val_b_two = p_val_b_one_right
-        else: # tail_b_scipy == "less"
-            p_val_b_two = p_val_b_one_left
-        
-        p_val_calc_b = p_val_b_two # This variable will hold the p-value based on tail selection
-
-        # Critical value for binomial test is not a single point like continuous distributions.
-        # It's the range of k values that would lead to rejection.
-        # We can find k_crit_low and k_crit_high such that P(X <= k_crit_low) <= alpha/2 and P(X >= k_crit_high) <= alpha/2 (for two-tailed)
+            p_val_calc_b = p_val_b_one_right
+        else: 
+            p_val_calc_b = p_val_b_one_left
         
         crit_val_b_display = "Exact critical k values are complex for binomial."
-        # For one-tailed:
         if tail_b_scipy == "greater":
-            k_crit_b_approx = stats.binom.isf(alpha_b, n_b, p_null_b) # Smallest k such that P(X>=k) <= alpha
+            k_crit_b_approx = stats.binom.isf(alpha_b, n_b, p_null_b) 
             crit_val_b_display = f"Reject if k ≥ {int(k_crit_b_approx)+1 if stats.binom.sf(int(k_crit_b_approx),n_b,p_null_b) > alpha_b else int(k_crit_b_approx)} (approx.)"
         elif tail_b_scipy == "less":
-            k_crit_b_approx = stats.binom.ppf(alpha_b, n_b, p_null_b) # Largest k such that P(X<=k) <= alpha
+            k_crit_b_approx = stats.binom.ppf(alpha_b, n_b, p_null_b) 
             crit_val_b_display = f"Reject if k ≤ {int(k_crit_b_approx)} (approx.)"
-        else: # two-sided
+        else: 
             k_crit_low_b_approx = stats.binom.ppf(alpha_b/2, n_b, p_null_b)
             k_crit_high_b_approx = stats.binom.isf(alpha_b/2, n_b, p_null_b)
             crit_val_b_display = f"Reject if k ≤ {int(k_crit_low_b_approx)} or k ≥ {int(k_crit_high_b_approx)+1 if stats.binom.sf(int(k_crit_high_b_approx),n_b,p_null_b) > alpha_b/2 else int(k_crit_high_b_approx)} (approx.)"
@@ -1152,23 +1110,9 @@ def tab_binomial_test():
         p_val_for_crit_val_b_display = alpha_b
         decision_p_alpha_b = p_val_calc_b < alpha_b
 
-        # Decision by critical value method for binomial is comparing observed k to critical k range
-        decision_crit_b = False # Default
-        comparison_crit_str_b = f"Observed k={k_success_b} compared to critical region."
-        if tail_b_scipy == "greater":
-            # k_crit_b_approx is the smallest k such that P(X>=k) <= alpha. So reject if observed_k >= k_crit_b_approx
-            # Need to be careful with exact boundary conditions due to discreteness.
-            # If p_val_calc_b < alpha_b, then it's rejected.
-            decision_crit_b = decision_p_alpha_b 
-            comparison_crit_str_b = f"k={k_success_b} falls in rejection region for p > {p_null_b}" if decision_crit_b else f"k={k_success_b} does not fall in rejection region for p > {p_null_b}"
-        elif tail_b_scipy == "less":
-            decision_crit_b = decision_p_alpha_b
-            comparison_crit_str_b = f"k={k_success_b} falls in rejection region for p < {p_null_b}" if decision_crit_b else f"k={k_success_b} does not fall in rejection region for p < {p_null_b}"
-        else: # two-sided
-            decision_crit_b = decision_p_alpha_b
-            comparison_crit_str_b = f"k={k_success_b} falls in rejection region for p ≠ {p_null_b}" if decision_crit_b else f"k={k_success_b} does not fall in rejection region for p ≠ {p_null_b}"
-
-
+        decision_crit_b = decision_p_alpha_b 
+        comparison_crit_str_b = f"Observed k={k_success_b} falls in rejection region" if decision_crit_b else f"Observed k={k_success_b} does not fall in rejection region"
+        
         st.markdown(f"""
         1.  **Approximate Critical Region ({tail_b_display})**: {crit_val_b_display}
             * *Associated significance level (α)*: {p_val_for_crit_val_b_display:.4f}
@@ -1187,13 +1131,11 @@ def tab_tukey_hsd():
     st.header("Tukey HSD (Honestly Significant Difference) Explorer")
     col1, col2 = st.columns([2, 1.5])
     
-    tukey_message = ""
-
     with col1:
         st.subheader("Inputs")
         alpha_tukey = st.number_input("Alpha (α)", 0.0001, 0.5, 0.05, 0.0001, format="%.4f", key="alpha_tukey_hsd")
-        k_tukey = st.number_input("Number of Groups (k)", 2, 50, 3, 1, key="k_tukey_hsd") # Increased max k
-        df_error_tukey = st.number_input("Degrees of Freedom for Error (within-group df)", 1, 2000, 20, 1, key="df_error_tukey_hsd") # Increased max df
+        k_tukey = st.number_input("Number of Groups (k)", 2, 50, 3, 1, key="k_tukey_hsd")
+        df_error_tukey = st.number_input("Degrees of Freedom for Error (within-group df)", 1, 2000, 20, 1, key="df_error_tukey_hsd")
         test_stat_tukey_q = st.number_input("Calculated q-statistic (for a pair)", value=1.0, format="%.3f", min_value=0.0, key="test_stat_tukey_q")
 
         st.subheader("Studentized Range q Distribution (Conceptual Plot)")
@@ -1201,48 +1143,61 @@ def tab_tukey_hsd():
         
         q_crit_tukey = None
         source_q_crit = "Not calculated"
+        q_crit_tukey_str_for_message = "N/A" # For messages
+
         try:
             from statsmodels.stats.libqsturng import qsturng
             q_crit_tukey = qsturng(1 - alpha_tukey, k_tukey, df_error_tukey)
             source_q_crit = "statsmodels.stats.libqsturng"
-            tukey_message = f"Critical q ({alpha_tukey:.3f}, k={k_tukey}, df={df_error_tukey}) = {q_crit_tukey:.3f} (from {source_q_crit})"
+            if isinstance(q_crit_tukey, (int, float)) and not np.isnan(q_crit_tukey):
+                q_crit_tukey_str_for_message = f"{q_crit_tukey:.3f}"
+            elif q_crit_tukey is not None: # Handles NaN or other non-None but non-float types
+                q_crit_tukey_str_for_message = str(q_crit_tukey)
+            
+            tukey_message = f"Critical q ({alpha_tukey:.3f}, k={k_tukey}, df={df_error_tukey}) = {q_crit_tukey_str_for_message} (from {source_q_crit})"
+
         except ImportError:
-            tukey_message = "Statsmodels `qsturng` not available. Using CSV fallback."
-            st.warning(tukey_message)
+            initial_message = "Statsmodels `qsturng` not available. Using CSV fallback."
+            st.warning(initial_message)
             q_crit_tukey = get_tukey_q_from_csv(df_error_tukey, k_tukey, alpha_tukey)
             source_q_crit = "CSV Fallback"
-            if q_crit_tukey is not None:
-                tukey_message += f"\nCritical q from CSV = {q_crit_tukey:.3f}. This may be an approximation."
-            else:
-                tukey_message += "\nCSV fallback failed."
+            if isinstance(q_crit_tukey, (int, float)) and not np.isnan(q_crit_tukey):
+                q_crit_tukey_str_for_message = f"{q_crit_tukey:.3f}"
+                tukey_message = f"{initial_message}\nCritical q from CSV = {q_crit_tukey_str_for_message}. This may be an approximation."
+            elif q_crit_tukey is not None:
+                q_crit_tukey_str_for_message = str(q_crit_tukey)
+                tukey_message = f"{initial_message}\nCritical q from CSV = {q_crit_tukey_str_for_message} (non-numeric). This may be an approximation."
+            else: 
+                q_crit_tukey_str_for_message = "N/A"
+                tukey_message = f"{initial_message}\nCSV fallback failed to find a value."
                 st.error("Could not determine critical q value from CSV.")
+        
         except Exception as e: 
-            tukey_message = f"Error using `statsmodels.stats.libqsturng`: {e}. Using CSV fallback."
-            st.warning(tukey_message)
+            initial_message = f"Error using `statsmodels.stats.libqsturng`: {e}. Using CSV fallback."
+            st.warning(initial_message)
             q_crit_tukey = get_tukey_q_from_csv(df_error_tukey, k_tukey, alpha_tukey)
             source_q_crit = "CSV Fallback (after error)"
-            if q_crit_tukey is not None:
-                tukey_message += f"\nCritical q from CSV = {q_crit_tukey:.3f}. This may be an approximation."
-            else:
-                tukey_message += "\nCSV fallback failed."
+            if isinstance(q_crit_tukey, (int, float)) and not np.isnan(q_crit_tukey):
+                q_crit_tukey_str_for_message = f"{q_crit_tukey:.3f}"
+                tukey_message = f"{initial_message}\nCritical q from CSV = {q_crit_tukey_str_for_message}. This may be an approximation."
+            elif q_crit_tukey is not None:
+                q_crit_tukey_str_for_message = str(q_crit_tukey)
+                tukey_message = f"{initial_message}\nCritical q from CSV = {q_crit_tukey_str_for_message} (non-numeric). This may be an approximation."
+            else: 
+                q_crit_tukey_str_for_message = "N/A"
+                tukey_message = f"{initial_message}\nCSV fallback failed to find a value."
                 st.error("Could not determine critical q value from CSV.")
-
-
+        
         fig_tukey, ax_tukey = plt.subplots(figsize=(8,5))
-        if q_crit_tukey is not None:
-            # Use chi-squared as a placeholder shape for q-distribution (always positive, skewed right)
-            # The df for chi2 is just for shaping, not a direct statistical link to q's df.
-            # Make plot range dynamic
+        if q_crit_tukey is not None and isinstance(q_crit_tukey, (int, float)) and not np.isnan(q_crit_tukey):
             plot_max_q = max(q_crit_tukey * 1.5, test_stat_tukey_q * 1.5, 5.0)
             if test_stat_tukey_q > q_crit_tukey * 1.2: plot_max_q = test_stat_tukey_q * 1.2
             
             x_placeholder = np.linspace(0.01, plot_max_q, 200)
-            # Using gamma distribution as a flexible stand-in shape, as q is related to range of normals
-            # Parameters for gamma are chosen to give a reasonable shape, not statistically derived for q.
-            shape_param = k_tukey # Heuristic
-            scale_param = max(q_crit_tukey, test_stat_tukey_q, 1.0) / (shape_param * 2 if shape_param > 0 else 2) # Heuristic
-            if shape_param <=0 : shape_param = 2 # Ensure positive shape
-            if scale_param <=0 : scale_param = 0.5 # Ensure positive scale
+            shape_param = float(k_tukey) 
+            scale_param = max(q_crit_tukey, test_stat_tukey_q, 1.0) / (shape_param * 2 if shape_param > 0 else 2) 
+            if shape_param <=0 : shape_param = 2.0 
+            if scale_param <=0 : scale_param = 0.5 
 
             try:
                 y_placeholder = stats.gamma.pdf(x_placeholder, a=shape_param, scale=scale_param)
@@ -1255,13 +1210,12 @@ def tab_tukey_hsd():
             except Exception as plot_e:
                  ax_tukey.text(0.5, 0.6, f"Plotting error: {plot_e}", ha='center', va='center', color='red')
 
-
             ax_tukey.axvline(test_stat_tukey_q, color='green', linestyle='-', lw=2, label=f'Test q = {test_stat_tukey_q:.3f}')
             ax_tukey.set_title(f'Conceptual q-Distribution (α={alpha_tukey:.3f})')
             ax_tukey.set_xlabel('q-value')
             ax_tukey.set_ylabel('Density (Illustrative)')
         else:
-            ax_tukey.text(0.5, 0.5, "Critical q not available for plotting.", ha='center', va='center')
+            ax_tukey.text(0.5, 0.5, "Critical q not available or non-numeric for plotting.", ha='center', va='center')
             ax_tukey.set_title('Plot Unavailable')
 
         ax_tukey.legend()
@@ -1280,17 +1234,24 @@ def tab_tukey_hsd():
         for a_val in alphas_table_tukey_list:
             q_c_table = None
             source_table = ""
+            q_c_table_str = "N/A"
             try:
                 from statsmodels.stats.libqsturng import qsturng
                 q_c_table = qsturng(1 - a_val, k_tukey, df_error_tukey)
                 source_table = "statsmodels"
-            except: # Broad except to catch ImportError or other calculation errors
+                if isinstance(q_c_table, (int,float)) and not np.isnan(q_c_table): q_c_table_str = f"{q_c_table:.3f}"
+                elif q_c_table is not None: q_c_table_str = str(q_c_table)
+
+            except: 
                 q_c_table = get_tukey_q_from_csv(df_error_tukey, k_tukey, a_val)
                 source_table = "CSV Fallback" if q_c_table is not None else "Not Found"
+                if isinstance(q_c_table, (int,float)) and not np.isnan(q_c_table): q_c_table_str = f"{q_c_table:.3f}"
+                elif q_c_table is not None: q_c_table_str = str(q_c_table)
+
             
             table_data_tukey_list.append({
                 "Alpha (α)": f"{a_val:.4f}",
-                "Critical q": f"{q_c_table:.3f}" if q_c_table is not None else "N/A",
+                "Critical q": q_c_table_str,
                 "Source": source_table
             })
         df_table_tukey = pd.DataFrame(table_data_tukey_list)
@@ -1308,15 +1269,13 @@ def tab_tukey_hsd():
 
     with col2:
         st.subheader("P-value Calculation Explanation")
-        # Try to calculate p-value for the test_stat_tukey_q if statsmodels is available
         p_val_calc_tukey = None
         p_val_source = "Not calculated"
         try:
-            from statsmodels.stats.libqsturng import psturng # CDF of studentized range
-            # psturng(q, k, v) gives P(Q_kv < q). We want P(Q_kv >= q_calc) = 1 - P(Q_kv < q_calc)
+            from statsmodels.stats.libqsturng import psturng 
             if test_stat_tukey_q is not None and k_tukey > 0 and df_error_tukey > 0:
-                 p_val_calc_tukey = 1 - psturng(test_stat_tukey_q, k_tukey, df_error_tukey)
-                 p_val_calc_tukey = max(0, min(p_val_calc_tukey, 1.0)) # Ensure 0 <= p <= 1
+                 p_val_calc_tukey = 1 - psturng(test_stat_tukey_q, float(k_tukey), float(df_error_tukey))
+                 p_val_calc_tukey = max(0, min(p_val_calc_tukey, 1.0)) 
                  p_val_source = "statsmodels.stats.libqsturng.psturng"
         except ImportError:
             p_val_source = "statsmodels not available for p-value calc."
@@ -1335,41 +1294,47 @@ def tab_tukey_hsd():
         st.subheader("Summary")
         p_val_for_crit_val_tukey_display = alpha_tukey
         
+        q_crit_tukey_display_val = "N/A"
+        if isinstance(q_crit_tukey, (int, float)) and not np.isnan(q_crit_tukey):
+            q_crit_tukey_display_val = f"{q_crit_tukey:.3f}"
+        elif q_crit_tukey is not None:
+            q_crit_tukey_display_val = str(q_crit_tukey)
+
+
         apa_p_val_calc_tukey_display = "p N/A"
-        if p_val_calc_tukey is not None:
+        p_val_calc_tukey_formatted_str = "N/A (requires statsmodels.stats.libqsturng.psturng)"
+
+        if p_val_calc_tukey is not None and not np.isnan(p_val_calc_tukey):
             apa_p_val_calc_tukey_display = apa_p_value(p_val_calc_tukey)
-            p_val_calc_tukey_display = f"{p_val_calc_tukey:.4f} ({apa_p_val_calc_tukey_display})"
-        else:
-            p_val_calc_tukey_display = "N/A (requires statsmodels.stats.libqsturng.psturng)"
-
-
+            p_val_calc_tukey_formatted_str = f"{p_val_calc_tukey:.4f} ({apa_p_val_calc_tukey_display})"
+        
         decision_crit_tukey = False
-        comparison_crit_str_tukey = "Critical q not available"
-        if q_crit_tukey is not None:
+        comparison_crit_str_tukey = "Critical q not available or non-numeric"
+        if q_crit_tukey is not None and isinstance(q_crit_tukey, (int, float)) and not np.isnan(q_crit_tukey):
             decision_crit_tukey = test_stat_tukey_q > q_crit_tukey
             comparison_crit_str_tukey = f"q(calc) ({test_stat_tukey_q:.3f}) > q(crit) ({q_crit_tukey:.3f})" if decision_crit_tukey else f"q(calc) ({test_stat_tukey_q:.3f}) ≤ q(crit) ({q_crit_tukey:.3f})"
         
         decision_p_alpha_tukey = False
-        reason_p_alpha_tukey_display = "p-value for q_calc not computed or q_crit not available."
-        if p_val_calc_tukey is not None:
+        reason_p_alpha_tukey_display = "p-value for q_calc not computed or q_crit not available/numeric."
+        if p_val_calc_tukey is not None and not np.isnan(p_val_calc_tukey):
             decision_p_alpha_tukey = p_val_calc_tukey < alpha_tukey
             reason_p_alpha_tukey_display = f"Because {apa_p_val_calc_tukey_display} is {'less than' if decision_p_alpha_tukey else 'not less than'} α ({alpha_tukey:.4f})."
-        elif q_crit_tukey is not None: # Fallback to crit value if p-value not calc'd
-             decision_p_alpha_tukey = decision_crit_tukey # Decision based on crit value method
+        elif q_crit_tukey is not None and isinstance(q_crit_tukey, (int, float)) and not np.isnan(q_crit_tukey): 
+             decision_p_alpha_tukey = decision_crit_tukey 
              reason_p_alpha_tukey_display = f"Decision based on critical value method as p-value for q_calc was not computed."
 
 
         st.markdown(f"""
-        1.  **Critical q-value**: {q_crit_tukey:.3f if q_crit_tukey is not None else "N/A"} (Source: {source_q_crit})
+        1.  **Critical q-value**: {q_crit_tukey_display_val} (Source: {source_q_crit})
             * *Associated significance level (α)*: {p_val_for_crit_val_tukey_display:.4f}
         2.  **Calculated q-statistic (for one pair)**: {test_stat_tukey_q:.3f}
-            * *Calculated p-value*: {p_val_calc_tukey_display} 
+            * *Calculated p-value*: {p_val_calc_tukey_formatted_str} 
         3.  **Decision (Critical Value Method)**: For this pair, H₀ (no difference) is **{'rejected' if decision_crit_tukey else 'not rejected'}**.
             * *Reason*: {comparison_crit_str_tukey}.
         4.  **Decision (p-value Method)**: H₀ (no difference) is **{'rejected' if decision_p_alpha_tukey else 'not rejected'}**.
             * *Reason*: {reason_p_alpha_tukey_display}
         5.  **APA 7 Style Report (for this specific comparison)**:
-            A Tukey HSD comparison for one pair yielded *q*({k_tukey}, {df_error_tukey}) = {test_stat_tukey_q:.2f}. {('The associated p-value was ' + apa_p_val_calc_tukey_display + '. ') if p_val_calc_tukey is not None else ''}The null hypothesis of no difference for this pair was {'rejected' if decision_p_alpha_tukey else 'not rejected'} at α = {alpha_tukey:.2f}.
+            A Tukey HSD comparison for one pair yielded *q*({k_tukey}, {df_error_tukey}) = {test_stat_tukey_q:.2f}. {('The associated p-value was ' + apa_p_val_calc_tukey_display + '. ') if p_val_calc_tukey is not None and not np.isnan(p_val_calc_tukey) else ''}The null hypothesis of no difference for this pair was {'rejected' if decision_p_alpha_tukey else 'not rejected'} at α = {alpha_tukey:.2f}.
         """)
         st.caption("Note: A full Tukey HSD analysis involves all pairwise comparisons. This tab focuses on interpreting a single calculated q-statistic.")
 
@@ -1381,7 +1346,7 @@ def tab_kruskal_wallis():
     with col1:
         st.subheader("Inputs")
         alpha_kw = st.number_input("Alpha (α)", 0.0001, 0.5, 0.05, 0.0001, format="%.4f", key="alpha_kw")
-        k_groups_kw = st.number_input("Number of Groups (k)", 2, 50, 3, 1, key="k_groups_kw") # KW needs at least 2 groups for df=1
+        k_groups_kw = st.number_input("Number of Groups (k)", 2, 50, 3, 1, key="k_groups_kw") 
         df_kw = k_groups_kw - 1
         st.markdown(f"Degrees of Freedom (df) = k - 1 = {df_kw}")
         test_stat_h_kw = st.number_input("Calculated H-statistic", value=float(df_kw if df_kw > 0 else 0.5), format="%.3f", min_value=0.0, key="test_stat_h_kw")
@@ -1389,7 +1354,7 @@ def tab_kruskal_wallis():
 
         st.subheader("Chi-square Distribution Plot (Approximation for H)")
         fig_kw, ax_kw = plt.subplots(figsize=(8,5))
-        crit_val_chi2_kw = None # Initialize
+        crit_val_chi2_kw = None 
         
         if df_kw > 0:
             plot_min_chi2_kw = 0.001
@@ -1404,7 +1369,7 @@ def tab_kruskal_wallis():
             crit_val_chi2_kw = stats.chi2.ppf(1 - alpha_kw, df_kw)
             x_fill_upper_kw = np.linspace(crit_val_chi2_kw, plot_max_chi2_kw, 100)
             ax_kw.fill_between(x_fill_upper_kw, stats.chi2.pdf(x_fill_upper_kw, df_kw), color='red', alpha=0.5, label=f'α = {alpha_kw:.4f}')
-            if crit_val_chi2_kw is not None: ax_kw.axvline(crit_val_chi2_kw, color='red', linestyle='--', lw=1, label=f'χ²_crit = {crit_val_chi2_kw:.3f}')
+            if crit_val_chi2_kw is not None and not np.isnan(crit_val_chi2_kw): ax_kw.axvline(crit_val_chi2_kw, color='red', linestyle='--', lw=1, label=f'χ²_crit = {crit_val_chi2_kw:.3f}')
             ax_kw.axvline(test_stat_h_kw, color='green', linestyle='-', lw=2, label=f'H_calc = {test_stat_h_kw:.3f}')
             ax_kw.set_title(f'χ²-Approximation for Kruskal-Wallis H (df={df_kw})')
             ax_kw.set_xlabel('χ²-value / H-statistic')
@@ -1455,30 +1420,31 @@ def tab_kruskal_wallis():
         p_val_for_crit_val_kw_display = alpha_kw
         p_val_calc_kw = float('nan')
         decision_crit_kw = False
-        comparison_crit_str_kw = "df must be > 0"
+        comparison_crit_str_kw = "df must be > 0 for a valid test"
         decision_p_alpha_kw = False
         apa_H_stat = f"*H*({df_kw if df_kw > 0 else 'N/A'}) = {test_stat_h_kw:.2f}"
         
-        if df_kw > 0 and crit_val_chi2_kw is not None :
+        if df_kw > 0 and crit_val_chi2_kw is not None and not np.isnan(crit_val_chi2_kw) :
             p_val_calc_kw = stats.chi2.sf(test_stat_h_kw, df_kw)
             decision_crit_kw = test_stat_h_kw > crit_val_chi2_kw
             comparison_crit_str_kw = f"H({test_stat_h_kw:.3f}) > χ²_crit({crit_val_chi2_kw:.3f})" if decision_crit_kw else f"H({test_stat_h_kw:.3f}) ≤ χ²_crit({crit_val_chi2_kw:.3f})"
-            decision_p_alpha_kw = p_val_calc_kw < alpha_kw
+            if not np.isnan(p_val_calc_kw):
+                 decision_p_alpha_kw = p_val_calc_kw < alpha_kw
         elif df_kw <= 0:
              apa_H_stat = f"*H* = {test_stat_h_kw:.2f} (df={df_kw}, test invalid)"
 
 
         st.markdown(f"""
-        1.  **Critical χ²-value (df={df_kw})**: {crit_val_chi2_kw:.3f if crit_val_chi2_kw is not None else "N/A (df=0 implies k≤1)"}
+        1.  **Critical χ²-value (df={df_kw})**: {crit_val_chi2_kw:.3f if crit_val_chi2_kw is not None and not np.isnan(crit_val_chi2_kw) else "N/A (df=0 implies k≤1)"}
             * *Associated p-value (α)*: {p_val_for_crit_val_kw_display:.4f}
         2.  **Calculated H-statistic**: {test_stat_h_kw:.3f}
-            * *Calculated p-value (from χ² approx.)*: {p_val_calc_kw:.4f if not np.isnan(p_val_calc_kw) else "N/A"} ({apa_p_value(p_val_calc_kw) if not np.isnan(p_val_calc_kw) else "N/A"})
+            * *Calculated p-value (from χ² approx.)*: {p_val_calc_kw:.4f if not np.isnan(p_val_calc_kw) else "N/A"} ({apa_p_value(p_val_calc_kw)})
         3.  **Decision (Critical Value Method)**: H₀ is **{'rejected' if decision_crit_kw else 'not rejected'}**.
             * *Reason*: {comparison_crit_str_kw}.
         4.  **Decision (p-value Method)**: H₀ is **{'rejected' if decision_p_alpha_kw else 'not rejected'}**.
-            * *Reason*: {apa_p_value(p_val_calc_kw) if not np.isnan(p_val_calc_kw) else "p N/A"} is {'less than' if decision_p_alpha_kw else 'not less than'} α ({alpha_kw:.4f}).
+            * *Reason*: {apa_p_value(p_val_calc_kw)} is {'less than' if decision_p_alpha_kw else 'not less than'} α ({alpha_kw:.4f}).
         5.  **APA 7 Style Report**:
-            A Kruskal-Wallis H test showed that there was {'' if decision_p_alpha_kw else 'not '}a statistically significant difference in medians between the k={k_groups_kw} groups, {apa_H_stat}, {apa_p_value(p_val_calc_kw) if not np.isnan(p_val_calc_kw) else "p N/A"}. The null hypothesis was {'rejected' if decision_p_alpha_kw else 'not rejected'} at α = {alpha_kw:.2f}.
+            A Kruskal-Wallis H test showed that there was {'' if decision_p_alpha_kw else 'not '}a statistically significant difference in medians between the k={k_groups_kw} groups, {apa_H_stat}, {apa_p_value(p_val_calc_kw)}. The null hypothesis was {'rejected' if decision_p_alpha_kw else 'not rejected'} at α = {alpha_kw:.2f}.
         """)
 
 # --- Tab 10: Friedman Test ---
@@ -1489,19 +1455,19 @@ def tab_friedman_test():
     with col1:
         st.subheader("Inputs")
         alpha_fr = st.number_input("Alpha (α)", 0.0001, 0.5, 0.05, 0.0001, format="%.4f", key="alpha_fr")
-        k_conditions_fr = st.number_input("Number of Conditions/Treatments (k)", 2, 50, 3, 1, key="k_conditions_fr") # Friedman needs k >= 2 for df=1
-        n_blocks_fr = st.number_input("Number of Blocks/Subjects (n)", 2, 200, 10, 1, key="n_blocks_fr") # n >= 2
+        k_conditions_fr = st.number_input("Number of Conditions/Treatments (k)", 2, 50, 3, 1, key="k_conditions_fr") 
+        n_blocks_fr = st.number_input("Number of Blocks/Subjects (n)", 2, 200, 10, 1, key="n_blocks_fr") 
         
         df_fr = k_conditions_fr - 1
         st.markdown(f"Degrees of Freedom (df) = k - 1 = {df_fr}")
         test_stat_q_fr = st.number_input("Calculated Friedman Q-statistic (or χ²_r)", value=float(df_fr if df_fr > 0 else 0.5), format="%.3f", min_value=0.0, key="test_stat_q_fr")
 
-        if n_blocks_fr <= 10 or k_conditions_fr <= 3 : # More general small sample warning
+        if n_blocks_fr <= 10 or k_conditions_fr <= 3 : 
             st.warning("Small n or k. Friedman’s χ² approximation may be less reliable. Exact methods preferred if available.")
 
         st.subheader("Chi-square Distribution Plot (Approximation for Q)")
         fig_fr, ax_fr = plt.subplots(figsize=(8,5))
-        crit_val_chi2_fr = None # Initialize
+        crit_val_chi2_fr = None 
 
         if df_fr > 0:
             plot_min_chi2_fr = 0.001
@@ -1516,7 +1482,7 @@ def tab_friedman_test():
             crit_val_chi2_fr = stats.chi2.ppf(1 - alpha_fr, df_fr)
             x_fill_upper_fr = np.linspace(crit_val_chi2_fr, plot_max_chi2_fr, 100)
             ax_fr.fill_between(x_fill_upper_fr, stats.chi2.pdf(x_fill_upper_fr, df_fr), color='red', alpha=0.5, label=f'α = {alpha_fr:.4f}')
-            if crit_val_chi2_fr is not None: ax_fr.axvline(crit_val_chi2_fr, color='red', linestyle='--', lw=1, label=f'χ²_crit = {crit_val_chi2_fr:.3f}')
+            if crit_val_chi2_fr is not None and not np.isnan(crit_val_chi2_fr): ax_fr.axvline(crit_val_chi2_fr, color='red', linestyle='--', lw=1, label=f'χ²_crit = {crit_val_chi2_fr:.3f}')
             ax_fr.axvline(test_stat_q_fr, color='green', linestyle='-', lw=2, label=f'Q_calc = {test_stat_q_fr:.3f}')
             ax_fr.set_title(f'χ²-Approximation for Friedman Q (df={df_fr})')
             ax_fr.set_xlabel('χ²-value / Q-statistic')
@@ -1567,30 +1533,31 @@ def tab_friedman_test():
         p_val_for_crit_val_fr_display = alpha_fr
         p_val_calc_fr = float('nan')
         decision_crit_fr = False
-        comparison_crit_str_fr = "df must be > 0"
+        comparison_crit_str_fr = "df must be > 0 for a valid test"
         decision_p_alpha_fr = False
         apa_Q_stat = f"χ²<sub>r</sub>({df_fr if df_fr > 0 else 'N/A'}) = {test_stat_q_fr:.2f}"
         
-        if df_fr > 0 and crit_val_chi2_fr is not None:
+        if df_fr > 0 and crit_val_chi2_fr is not None and not np.isnan(crit_val_chi2_fr):
             p_val_calc_fr = stats.chi2.sf(test_stat_q_fr, df_fr)
             decision_crit_fr = test_stat_q_fr > crit_val_chi2_fr
             comparison_crit_str_fr = f"Q({test_stat_q_fr:.3f}) > χ²_crit({crit_val_chi2_fr:.3f})" if decision_crit_fr else f"Q({test_stat_q_fr:.3f}) ≤ χ²_crit({crit_val_chi2_fr:.3f})"
-            decision_p_alpha_fr = p_val_calc_fr < alpha_fr
-        elif df_fr <=0:
-            apa_Q_stat = f"χ²<sub>r</sub> = {test_stat_q_fr:.2f} (df={df_fr}, test invalid)"
+            if not np.isnan(p_val_calc_fr):
+                decision_p_alpha_fr = p_val_calc_fr < alpha_fr
+        elif df_fr <=0 :
+             apa_Q_stat = f"χ²<sub>r</sub> = {test_stat_q_fr:.2f} (df={df_fr}, test invalid)"
 
 
         st.markdown(f"""
-        1.  **Critical χ²-value (df={df_fr})**: {crit_val_chi2_fr:.3f if crit_val_chi2_fr is not None else "N/A (df=0 implies k≤1)"}
+        1.  **Critical χ²-value (df={df_fr})**: {crit_val_chi2_fr:.3f if crit_val_chi2_fr is not None and not np.isnan(crit_val_chi2_fr) else "N/A (df=0 implies k≤1)"}
             * *Associated p-value (α)*: {p_val_for_crit_val_fr_display:.4f}
         2.  **Calculated Q-statistic (χ²_r)**: {test_stat_q_fr:.3f}
-            * *Calculated p-value (from χ² approx.)*: {p_val_calc_fr:.4f if not np.isnan(p_val_calc_fr) else "N/A"} ({apa_p_value(p_val_calc_fr) if not np.isnan(p_val_calc_fr) else "N/A"})
+            * *Calculated p-value (from χ² approx.)*: {p_val_calc_fr:.4f if not np.isnan(p_val_calc_fr) else "N/A"} ({apa_p_value(p_val_calc_fr)})
         3.  **Decision (Critical Value Method)**: H₀ is **{'rejected' if decision_crit_fr else 'not rejected'}**.
             * *Reason*: {comparison_crit_str_fr}.
         4.  **Decision (p-value Method)**: H₀ is **{'rejected' if decision_p_alpha_fr else 'not rejected'}**.
-            * *Reason*: {apa_p_value(p_val_calc_fr) if not np.isnan(p_val_calc_fr) else "p N/A"} is {'less than' if decision_p_alpha_fr else 'not less than'} α ({alpha_fr:.4f}).
+            * *Reason*: {apa_p_value(p_val_calc_fr)} is {'less than' if decision_p_alpha_fr else 'not less than'} α ({alpha_fr:.4f}).
         5.  **APA 7 Style Report**:
-            A Friedman test indicated that there was {'' if decision_p_alpha_fr else 'not '}a statistically significant difference in medians across the k={k_conditions_fr} conditions for n={n_blocks_fr} blocks, {apa_Q_stat}, {apa_p_value(p_val_calc_fr) if not np.isnan(p_val_calc_fr) else "p N/A"}. The null hypothesis was {'rejected' if decision_p_alpha_fr else 'not rejected'} at α = {alpha_fr:.2f}.
+            A Friedman test indicated that there was {'' if decision_p_alpha_fr else 'not '}a statistically significant difference in medians across the k={k_conditions_fr} conditions for n={n_blocks_fr} blocks, {apa_Q_stat}, {apa_p_value(p_val_calc_fr)}. The null hypothesis was {'rejected' if decision_p_alpha_fr else 'not rejected'} at α = {alpha_fr:.2f}.
         """, unsafe_allow_html=True)
 
 
