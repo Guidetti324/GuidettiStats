@@ -15,7 +15,6 @@ def apa_p_value(p_val):
         return f"p = {p_val:.3f}"
 
 # Embedded CSV data for Tukey HSD fallback
-# THIS IS WHERE THE CSV DATA GOES - AS A MULTILINE STRING
 TUKEY_CSV_DATA = """df,k,alpha_0.01,alpha_0.05,alpha_0.10
 1,2,90.030,17.970,8.990
 1,3,135.000,26.980,13.480
@@ -128,103 +127,179 @@ def tab_t_distribution():
     with col1:
         st.subheader("Inputs")
         alpha_t = st.number_input("Alpha (α)", 0.0001, 0.5, 0.05, 0.0001, format="%.4f", key="alpha_t")
-        df_t = st.number_input("Degrees of Freedom (df)", 1, 1000, 10, 1, key="df_t")
+        
+        # Define df options including 'z' for infinity
+        df_options = list(range(1, 31)) + [40, 60, 80, 100, 1000, 'z (∞)']
+        df_t_display = st.selectbox("Degrees of Freedom (df)", options=df_options, index=9) # Default to df=10
+
+        if df_t_display == 'z (∞)':
+            df_t_calc = np.inf
+        else:
+            df_t_calc = int(df_t_display)
+
         tail_t = st.radio("Tail Selection", ("Two-tailed", "One-tailed (right)", "One-tailed (left)"), key="tail_t")
         test_stat_t = st.number_input("Calculated t-statistic", value=0.0, format="%.3f", key="test_stat_t")
 
         st.subheader("Distribution Plot")
         fig_t, ax_t = plt.subplots(figsize=(8,5)) 
         
-        plot_min_t = min(stats.t.ppf(0.0001, df_t), test_stat_t - 2*stats.t.std(df_t), -4.0)
-        plot_max_t = max(stats.t.ppf(0.9999, df_t), test_stat_t + 2*stats.t.std(df_t), 4.0)
-        if abs(test_stat_t) > 4: 
+        # Use df_t_calc for plotting and calculations
+        if np.isinf(df_t_calc): # Plot normal distribution for z
+            dist_label = 'Standard Normal (z)'
+            plot_min_t = min(stats.norm.ppf(0.0001), test_stat_t - 2, -4.0)
+            plot_max_t = max(stats.norm.ppf(0.9999), test_stat_t + 2, 4.0)
+            x_t = np.linspace(plot_min_t, plot_max_t, 500)
+            y_t = stats.norm.pdf(x_t)
+            crit_func_ppf = stats.norm.ppf
+            crit_func_pdf = stats.norm.pdf
+        else: # Plot t-distribution
+            dist_label = f't-distribution (df={df_t_calc})'
+            plot_min_t = min(stats.t.ppf(0.0001, df_t_calc), test_stat_t - 2*stats.t.std(df_t_calc), -4.0)
+            plot_max_t = max(stats.t.ppf(0.9999, df_t_calc), test_stat_t + 2*stats.t.std(df_t_calc), 4.0)
+            x_t = np.linspace(plot_min_t, plot_max_t, 500)
+            y_t = stats.t.pdf(x_t, df_t_calc)
+            crit_func_ppf = lambda q: stats.t.ppf(q, df_t_calc)
+            crit_func_pdf = lambda x: stats.t.pdf(x, df_t_calc)
+
+        if abs(test_stat_t) > 4 and abs(test_stat_t) > plot_max_t * 0.8 : 
             plot_min_t = min(plot_min_t, test_stat_t -1)
             plot_max_t = max(plot_max_t, test_stat_t +1)
+            x_t = np.linspace(plot_min_t, plot_max_t, 500) # Re-evaluate x_t if range changed
+            y_t = crit_func_pdf(x_t)
 
-        x_t = np.linspace(plot_min_t, plot_max_t, 500)
-        y_t = stats.t.pdf(x_t, df_t)
-        ax_t.plot(x_t, y_t, 'b-', lw=2, label=f't-distribution (df={df_t})')
 
+        ax_t.plot(x_t, y_t, 'b-', lw=2, label=dist_label)
         crit_val_t_upper = None
         crit_val_t_lower = None
 
         if tail_t == "Two-tailed":
-            crit_val_t_upper = stats.t.ppf(1 - alpha_t / 2, df_t)
-            crit_val_t_lower = stats.t.ppf(alpha_t / 2, df_t)
+            crit_val_t_upper = crit_func_ppf(1 - alpha_t / 2)
+            crit_val_t_lower = crit_func_ppf(alpha_t / 2)
             x_fill_upper = np.linspace(crit_val_t_upper, plot_max_t, 100)
             x_fill_lower = np.linspace(plot_min_t, crit_val_t_lower, 100)
-            ax_t.fill_between(x_fill_upper, stats.t.pdf(x_fill_upper, df_t), color='red', alpha=0.5, label=f'α/2 = {alpha_t/2:.4f}')
-            ax_t.fill_between(x_fill_lower, stats.t.pdf(x_fill_lower, df_t), color='red', alpha=0.5)
+            ax_t.fill_between(x_fill_upper, crit_func_pdf(x_fill_upper), color='red', alpha=0.5, label=f'α/2 = {alpha_t/2:.4f}')
+            ax_t.fill_between(x_fill_lower, crit_func_pdf(x_fill_lower), color='red', alpha=0.5)
             if crit_val_t_upper is not None and not np.isnan(crit_val_t_upper): ax_t.axvline(crit_val_t_upper, color='red', linestyle='--', lw=1)
             if crit_val_t_lower is not None and not np.isnan(crit_val_t_lower): ax_t.axvline(crit_val_t_lower, color='red', linestyle='--', lw=1)
         elif tail_t == "One-tailed (right)":
-            crit_val_t_upper = stats.t.ppf(1 - alpha_t, df_t)
+            crit_val_t_upper = crit_func_ppf(1 - alpha_t)
             x_fill_upper = np.linspace(crit_val_t_upper, plot_max_t, 100)
-            ax_t.fill_between(x_fill_upper, stats.t.pdf(x_fill_upper, df_t), color='red', alpha=0.5, label=f'α = {alpha_t:.4f}')
+            ax_t.fill_between(x_fill_upper, crit_func_pdf(x_fill_upper), color='red', alpha=0.5, label=f'α = {alpha_t:.4f}')
             if crit_val_t_upper is not None and not np.isnan(crit_val_t_upper): ax_t.axvline(crit_val_t_upper, color='red', linestyle='--', lw=1)
         else: 
-            crit_val_t_lower = stats.t.ppf(alpha_t, df_t)
+            crit_val_t_lower = crit_func_ppf(alpha_t)
             x_fill_lower = np.linspace(plot_min_t, crit_val_t_lower, 100)
-            ax_t.fill_between(x_fill_lower, stats.t.pdf(x_fill_lower, df_t), color='red', alpha=0.5, label=f'α = {alpha_t:.4f}')
+            ax_t.fill_between(x_fill_lower, crit_func_pdf(x_fill_lower), color='red', alpha=0.5, label=f'α = {alpha_t:.4f}')
             if crit_val_t_lower is not None and not np.isnan(crit_val_t_lower): ax_t.axvline(crit_val_t_lower, color='red', linestyle='--', lw=1)
 
         ax_t.axvline(test_stat_t, color='green', linestyle='-', lw=2, label=f'Test Stat = {test_stat_t:.3f}')
-        ax_t.set_title(f't-Distribution (df={df_t}) with Critical Region(s)')
-        ax_t.set_xlabel('t-value')
+        ax_t.set_title(f'{dist_label} with Critical Region(s)')
+        ax_t.set_xlabel('t-value' if not np.isinf(df_t_calc) else 'z-value')
         ax_t.set_ylabel('Probability Density')
         ax_t.legend()
         ax_t.grid(True, linestyle=':', alpha=0.7)
         st.pyplot(fig_t)
 
-        st.subheader("Critical Value Table Snippet")
-        alphas_table = [0.10, 0.05, 0.025, 0.01, 0.005, alpha_t, alpha_t/2 if tail_t == "Two-tailed" else alpha_t]
-        alphas_table = sorted(list(set(a for a in alphas_table if 0.00005 < a < 0.50005))) 
+        st.subheader("t-Value Table")
+        # Define standard alpha levels for columns (one-tailed)
+        one_tail_alphas_cols = [0.25, 0.10, 0.05, 0.025, 0.01, 0.005, 0.001, 0.0005]
+        # Create column names for one-tail and two-tail
+        table_cols_one_tail = {alpha_val: f"{alpha_val:.4f}" for alpha_val in one_tail_alphas_cols}
+        table_cols_two_tail = {alpha_val: f"{alpha_val*2:.4f}" for alpha_val in one_tail_alphas_cols}
 
-        table_data_t_list = []
-        for a_val_one_tail in alphas_table:
-            a_val_two_tail = a_val_one_tail * 2
-            cv_upper = stats.t.ppf(1 - a_val_one_tail, df_t)
-            cv_lower = stats.t.ppf(a_val_one_tail, df_t)
-            table_data_t_list.append({
-                "α (One-Tail)": f"{a_val_one_tail:.4f}",
-                "α (Two-Tail)": f"{a_val_two_tail:.4f}" if a_val_two_tail <= 0.51 else "-", 
-                "t_crit (Lower)": f"{cv_lower:.3f}",
-                "t_crit (Upper)": f"{cv_upper:.3f}"
-            })
-        df_table_t = pd.DataFrame(table_data_t_list)
+        header = pd.MultiIndex.from_tuples(
+            [('Area in One Tail', table_cols_one_tail[alpha_val]) for alpha_val in one_tail_alphas_cols] +
+            [('Area in Two Tails', table_cols_two_tail[alpha_val]) for alpha_val in one_tail_alphas_cols]
+        )
         
-        def highlight_alpha_row_t(row):
-            highlight = False
-            if tail_t == "Two-tailed":
-                if abs(float(row["α (One-Tail)"]) - (alpha_t / 2)) < 1e-5 :
-                    highlight = True
-            else: 
-                if abs(float(row["α (One-Tail)"]) - alpha_t) < 1e-5:
-                    highlight = True
-            return ['background-color: yellow'] * len(row) if highlight else [''] * len(row)
+        # Create the DataFrame data
+        table_data_list = []
+        for df_val_display in df_options:
+            row_data = {}
+            current_df_calc = np.inf if df_val_display == 'z (∞)' else int(df_val_display)
+            
+            for one_alpha in one_tail_alphas_cols:
+                if np.isinf(current_df_calc):
+                    crit_val = stats.norm.ppf(1 - one_alpha)
+                else:
+                    crit_val = stats.t.ppf(1 - one_alpha, current_df_calc)
+                
+                # Store for both one-tail and two-tail lookup, using the one-tail alpha as the key part
+                row_data[('Area in One Tail', table_cols_one_tail[one_alpha])] = f"{crit_val:.3f}"
+                row_data[('Area in Two Tails', table_cols_two_tail[one_alpha])] = f"{crit_val:.3f}" # Same critical value, interpretation changes
+            table_data_list.append(row_data)
 
-        st.markdown(df_table_t.style.apply(highlight_alpha_row_t, axis=1).to_html(), unsafe_allow_html=True)
-        st.caption(f"Table shows critical t-values for df={df_t}. Highlighted row corresponds to your selected α={alpha_t:.4f} ({tail_t}).")
+        df_t_table = pd.DataFrame(table_data_list, index=df_options)
+        df_t_table.columns = header # Apply multi-index header
+
+        # Styling function
+        def highlight_t_table(data):
+            attr_df = pd.DataFrame('', index=data.index, columns=data.columns)
+            # Highlight selected DF row
+            if df_t_display in data.index:
+                attr_df.loc[df_t_display, :] = 'background-color: lightblue'
+
+            # Determine target alpha for column highlighting based on tail type
+            target_alpha_col_val = None
+            if tail_t == "Two-tailed":
+                target_alpha_col_val = alpha_t # This is the total two-tail alpha
+            else: # One-tailed
+                target_alpha_col_val = alpha_t # This is the one-tail alpha
+
+            # Highlight selected Alpha column(s) and the specific cell
+            for col_idx, (level0, level1_alpha_str) in enumerate(data.columns):
+                try:
+                    col_alpha_numeric = float(level1_alpha_str)
+                    is_target_col = False
+                    if tail_t == "Two-tailed" and level0 == 'Area in Two Tails' and abs(col_alpha_numeric - target_alpha_col_val) < 1e-5:
+                        is_target_col = True
+                    elif tail_t != "Two-tailed" and level0 == 'Area in One Tail' and abs(col_alpha_numeric - target_alpha_col_val) < 1e-5:
+                        is_target_col = True
+                    
+                    if is_target_col:
+                        attr_df.iloc[:, col_idx] = attr_df.iloc[:, col_idx].astype(str) + '; background-color: lightgreen'
+                        # Highlight specific cell
+                        if df_t_display in data.index:
+                             attr_df.loc[df_t_display, (level0, level1_alpha_str)] += '; font-weight: bold; border: 2px solid red;'
+
+                except ValueError: # If column name is not a float (should not happen with current setup)
+                    pass
+            return attr_df
+
+        st.markdown(df_t_table.style.apply(highlight_t_table, axis=None).to_html(), unsafe_allow_html=True)
+        st.caption(f"Highlighted row for df={df_t_display}, column for selected α={alpha_t:.4f} ({tail_t}), and specific critical value in red.")
+
 
         st.markdown("""
         **Cumulative Table Note:**
-        * For **one-tailed tests**, find your chosen α in the 'α (One-Tail)' column. Use the corresponding 't_crit (Upper)' for a right-tailed test or 't_crit (Lower)' for a left-tailed test.
-        * For **two-tailed tests**, your total α is split into two tails (α/2 in each). Find this α/2 value in the 'α (One-Tail)' column. The critical values will be 't_crit (Lower)' and 't_crit (Upper)'.
+        * The table shows upper critical values. For left-tailed tests, use the negative of these values.
+        * For **one-tailed tests**, find your df in the rows and your chosen α under 'Area in One Tail'.
+        * For **two-tailed tests**, find your df in the rows and your total α under 'Area in Two Tails'. The table value is t<sub>α/2</sub>.
         """)
 
     with col2:
         st.subheader("P-value Calculation Explanation")
+        # Use df_t_calc for p-value calculation
+        if np.isinf(df_t_calc):
+            p_val_func_sf = stats.norm.sf
+            p_val_func_cdf = stats.norm.cdf
+            dist_name_p = "Z"
+        else:
+            p_val_func_sf = lambda val: stats.t.sf(val, df_t_calc)
+            p_val_func_cdf = lambda val: stats.t.cdf(val, df_t_calc)
+            dist_name_p = "T"
+
         st.markdown(f"""
         The p-value is the probability of observing a test statistic as extreme as, or more extreme than, the calculated statistic ({test_stat_t:.3f}), assuming the null hypothesis is true.
-        * For a **two-tailed test**, it's `2 * P(T ≥ |{test_stat_t:.3f}|)` (i.e., `2 * stats.t.sf(abs(test_stat_t), df_t)`).
-        * For a **one-tailed (right) test**, it's `P(T ≥ {test_stat_t:.3f})` (i.e., `stats.t.sf(test_stat_t, df_t)`).
-        * For a **one-tailed (left) test**, it's `P(T ≤ {test_stat_t:.3f})` (i.e., `stats.t.cdf(test_stat_t, df_t)`).
+        * For a **two-tailed test**, it's `2 * P({dist_name_p} ≥ |{test_stat_t:.3f}|)`.
+        * For a **one-tailed (right) test**, it's `P({dist_name_p} ≥ {test_stat_t:.3f})`.
+        * For a **one-tailed (left) test**, it's `P({dist_name_p} ≤ {test_stat_t:.3f})`.
         """)
 
         st.subheader("Summary")
-        p_val_t_one_right = stats.t.sf(test_stat_t, df_t)
-        p_val_t_one_left = stats.t.cdf(test_stat_t, df_t)
-        p_val_t_two = 2 * stats.t.sf(abs(test_stat_t), df_t)
+        p_val_t_one_right = p_val_func_sf(test_stat_t)
+        p_val_t_one_left = p_val_func_cdf(test_stat_t)
+        p_val_t_two = 2 * p_val_func_sf(abs(test_stat_t))
         p_val_t_two = min(p_val_t_two, 1.0) 
 
 
@@ -249,20 +324,24 @@ def tab_t_distribution():
 
         decision_p_alpha = p_val_calc < alpha_t
         
+        df_report_str = "∞" if np.isinf(df_t_calc) else str(df_t_calc)
+        stat_symbol = "z" if np.isinf(df_t_calc) else "t"
+
         st.markdown(f"""
         1.  **Critical Value ({tail_t})**: {crit_val_display}
             * *Associated p-value (α or α/2 per tail)*: {p_val_for_crit_val_display:.4f}
         2.  **Calculated Test Statistic**: {test_stat_t:.3f}
             * *Calculated p-value*: {p_val_calc:.4f} ({apa_p_value(p_val_calc)})
         3.  **Decision (Critical Value Method)**: The null hypothesis is **{'rejected' if decision_crit else 'not rejected'}**.
-            * *Reason*: Because t(calc) {comparison_crit_str} relative to t(crit).
+            * *Reason*: Because {stat_symbol}(calc) {comparison_crit_str} relative to {stat_symbol}(crit).
         4.  **Decision (p-value Method)**: The null hypothesis is **{'rejected' if decision_p_alpha else 'not rejected'}**.
             * *Reason*: Because {apa_p_value(p_val_calc)} is {'less than' if decision_p_alpha else 'not less than'} α ({alpha_t:.4f}).
         5.  **APA 7 Style Report**:
-            *t*({df_t}) = {test_stat_t:.2f}, {apa_p_value(p_val_calc)}. The null hypothesis was {'rejected' if decision_p_alpha else 'not rejected'} at the α = {alpha_t:.2f} level.
+            *{stat_symbol}*({df_report_str}) = {test_stat_t:.2f}, {apa_p_value(p_val_calc)}. The null hypothesis was {'rejected' if decision_p_alpha else 'not rejected'} at the α = {alpha_t:.2f} level.
         """)
 
 # --- Tab 2: z-distribution ---
+# (Code remains largely the same, ensure robustness for crit_val display if needed)
 def tab_z_distribution():
     st.header("z-Distribution (Normal) Explorer")
     col1, col2 = st.columns([2, 1.5])
@@ -1143,7 +1222,7 @@ def tab_tukey_hsd():
         
         q_crit_tukey = None
         source_q_crit = "Not calculated"
-        q_crit_tukey_str_for_message = "N/A" # For messages
+        q_crit_tukey_str_for_message = "N/A" 
 
         try:
             from statsmodels.stats.libqsturng import qsturng
@@ -1151,11 +1230,9 @@ def tab_tukey_hsd():
             source_q_crit = "statsmodels.stats.libqsturng"
             if isinstance(q_crit_tukey, (int, float)) and not np.isnan(q_crit_tukey):
                 q_crit_tukey_str_for_message = f"{q_crit_tukey:.3f}"
-            elif q_crit_tukey is not None: # Handles NaN or other non-None but non-float types
+            elif q_crit_tukey is not None: 
                 q_crit_tukey_str_for_message = str(q_crit_tukey)
-            
             tukey_message = f"Critical q ({alpha_tukey:.3f}, k={k_tukey}, df={df_error_tukey}) = {q_crit_tukey_str_for_message} (from {source_q_crit})"
-
         except ImportError:
             initial_message = "Statsmodels `qsturng` not available. Using CSV fallback."
             st.warning(initial_message)
@@ -1171,7 +1248,6 @@ def tab_tukey_hsd():
                 q_crit_tukey_str_for_message = "N/A"
                 tukey_message = f"{initial_message}\nCSV fallback failed to find a value."
                 st.error("Could not determine critical q value from CSV.")
-        
         except Exception as e: 
             initial_message = f"Error using `statsmodels.stats.libqsturng`: {e}. Using CSV fallback."
             st.warning(initial_message)
@@ -1355,6 +1431,7 @@ def tab_kruskal_wallis():
         st.subheader("Chi-square Distribution Plot (Approximation for H)")
         fig_kw, ax_kw = plt.subplots(figsize=(8,5))
         crit_val_chi2_kw = None 
+        crit_val_chi2_kw_display = "N/A (df=0 implies k≤1)"
         
         if df_kw > 0:
             plot_min_chi2_kw = 0.001
@@ -1367,9 +1444,15 @@ def tab_kruskal_wallis():
             ax_kw.plot(x_chi2_kw, y_chi2_kw, 'b-', lw=2, label=f'χ²-distribution (df={df_kw})')
 
             crit_val_chi2_kw = stats.chi2.ppf(1 - alpha_kw, df_kw)
-            x_fill_upper_kw = np.linspace(crit_val_chi2_kw, plot_max_chi2_kw, 100)
-            ax_kw.fill_between(x_fill_upper_kw, stats.chi2.pdf(x_fill_upper_kw, df_kw), color='red', alpha=0.5, label=f'α = {alpha_kw:.4f}')
-            if crit_val_chi2_kw is not None and not np.isnan(crit_val_chi2_kw): ax_kw.axvline(crit_val_chi2_kw, color='red', linestyle='--', lw=1, label=f'χ²_crit = {crit_val_chi2_kw:.3f}')
+            if isinstance(crit_val_chi2_kw, (int, float)) and not np.isnan(crit_val_chi2_kw):
+                crit_val_chi2_kw_display = f"{crit_val_chi2_kw:.3f}"
+                x_fill_upper_kw = np.linspace(crit_val_chi2_kw, plot_max_chi2_kw, 100)
+                ax_kw.fill_between(x_fill_upper_kw, stats.chi2.pdf(x_fill_upper_kw, df_kw), color='red', alpha=0.5, label=f'α = {alpha_kw:.4f}')
+                ax_kw.axvline(crit_val_chi2_kw, color='red', linestyle='--', lw=1, label=f'χ²_crit = {crit_val_chi2_kw_display}')
+            else:
+                 crit_val_chi2_kw_display = "N/A (calc error)"
+
+
             ax_kw.axvline(test_stat_h_kw, color='green', linestyle='-', lw=2, label=f'H_calc = {test_stat_h_kw:.3f}')
             ax_kw.set_title(f'χ²-Approximation for Kruskal-Wallis H (df={df_kw})')
             ax_kw.set_xlabel('χ²-value / H-statistic')
@@ -1390,9 +1473,10 @@ def tab_kruskal_wallis():
             table_data_chi2_kw_list = []
             for a_val_one_tail in alphas_table_chi2_kw_list:
                 cv_upper = stats.chi2.ppf(1 - a_val_one_tail, df_kw)
+                cv_upper_str = f"{cv_upper:.3f}" if isinstance(cv_upper, (int,float)) and not np.isnan(cv_upper) else "N/A"
                 table_data_chi2_kw_list.append({
                     "α (Right Tail)": f"{a_val_one_tail:.4f}",
-                    "Critical χ² (Upper)": f"{cv_upper:.3f}"
+                    "Critical χ² (Upper)": cv_upper_str
                 })
             df_table_chi2_kw = pd.DataFrame(table_data_chi2_kw_list)
             
@@ -1424,7 +1508,7 @@ def tab_kruskal_wallis():
         decision_p_alpha_kw = False
         apa_H_stat = f"*H*({df_kw if df_kw > 0 else 'N/A'}) = {test_stat_h_kw:.2f}"
         
-        if df_kw > 0 and crit_val_chi2_kw is not None and not np.isnan(crit_val_chi2_kw) :
+        if df_kw > 0 and crit_val_chi2_kw is not None and isinstance(crit_val_chi2_kw, (int,float)) and not np.isnan(crit_val_chi2_kw) :
             p_val_calc_kw = stats.chi2.sf(test_stat_h_kw, df_kw)
             decision_crit_kw = test_stat_h_kw > crit_val_chi2_kw
             comparison_crit_str_kw = f"H({test_stat_h_kw:.3f}) > χ²_crit({crit_val_chi2_kw:.3f})" if decision_crit_kw else f"H({test_stat_h_kw:.3f}) ≤ χ²_crit({crit_val_chi2_kw:.3f})"
@@ -1435,7 +1519,7 @@ def tab_kruskal_wallis():
 
 
         st.markdown(f"""
-        1.  **Critical χ²-value (df={df_kw})**: {crit_val_chi2_kw:.3f if crit_val_chi2_kw is not None and not np.isnan(crit_val_chi2_kw) else "N/A (df=0 implies k≤1)"}
+        1.  **Critical χ²-value (df={df_kw})**: {crit_val_chi2_kw_display}
             * *Associated p-value (α)*: {p_val_for_crit_val_kw_display:.4f}
         2.  **Calculated H-statistic**: {test_stat_h_kw:.3f}
             * *Calculated p-value (from χ² approx.)*: {p_val_calc_kw:.4f if not np.isnan(p_val_calc_kw) else "N/A"} ({apa_p_value(p_val_calc_kw)})
@@ -1468,6 +1552,8 @@ def tab_friedman_test():
         st.subheader("Chi-square Distribution Plot (Approximation for Q)")
         fig_fr, ax_fr = plt.subplots(figsize=(8,5))
         crit_val_chi2_fr = None 
+        crit_val_chi2_fr_display = "N/A (df=0 implies k≤1)"
+
 
         if df_fr > 0:
             plot_min_chi2_fr = 0.001
@@ -1480,9 +1566,15 @@ def tab_friedman_test():
             ax_fr.plot(x_chi2_fr, y_chi2_fr, 'b-', lw=2, label=f'χ²-distribution (df={df_fr})')
 
             crit_val_chi2_fr = stats.chi2.ppf(1 - alpha_fr, df_fr)
-            x_fill_upper_fr = np.linspace(crit_val_chi2_fr, plot_max_chi2_fr, 100)
-            ax_fr.fill_between(x_fill_upper_fr, stats.chi2.pdf(x_fill_upper_fr, df_fr), color='red', alpha=0.5, label=f'α = {alpha_fr:.4f}')
-            if crit_val_chi2_fr is not None and not np.isnan(crit_val_chi2_fr): ax_fr.axvline(crit_val_chi2_fr, color='red', linestyle='--', lw=1, label=f'χ²_crit = {crit_val_chi2_fr:.3f}')
+            if isinstance(crit_val_chi2_fr, (int,float)) and not np.isnan(crit_val_chi2_fr):
+                crit_val_chi2_fr_display = f"{crit_val_chi2_fr:.3f}"
+                x_fill_upper_fr = np.linspace(crit_val_chi2_fr, plot_max_chi2_fr, 100)
+                ax_fr.fill_between(x_fill_upper_fr, stats.chi2.pdf(x_fill_upper_fr, df_fr), color='red', alpha=0.5, label=f'α = {alpha_fr:.4f}')
+                ax_fr.axvline(crit_val_chi2_fr, color='red', linestyle='--', lw=1, label=f'χ²_crit = {crit_val_chi2_fr_display}')
+            else:
+                crit_val_chi2_fr_display = "N/A (calc error)"
+
+
             ax_fr.axvline(test_stat_q_fr, color='green', linestyle='-', lw=2, label=f'Q_calc = {test_stat_q_fr:.3f}')
             ax_fr.set_title(f'χ²-Approximation for Friedman Q (df={df_fr})')
             ax_fr.set_xlabel('χ²-value / Q-statistic')
@@ -1503,9 +1595,10 @@ def tab_friedman_test():
             table_data_chi2_fr_list = []
             for a_val_one_tail in alphas_table_chi2_fr_list:
                 cv_upper = stats.chi2.ppf(1 - a_val_one_tail, df_fr)
+                cv_upper_str = f"{cv_upper:.3f}" if isinstance(cv_upper, (int,float)) and not np.isnan(cv_upper) else "N/A"
                 table_data_chi2_fr_list.append({
                     "α (Right Tail)": f"{a_val_one_tail:.4f}",
-                    "Critical χ² (Upper)": f"{cv_upper:.3f}"
+                    "Critical χ² (Upper)": cv_upper_str
                 })
             df_table_chi2_fr = pd.DataFrame(table_data_chi2_fr_list)
             
@@ -1537,7 +1630,7 @@ def tab_friedman_test():
         decision_p_alpha_fr = False
         apa_Q_stat = f"χ²<sub>r</sub>({df_fr if df_fr > 0 else 'N/A'}) = {test_stat_q_fr:.2f}"
         
-        if df_fr > 0 and crit_val_chi2_fr is not None and not np.isnan(crit_val_chi2_fr):
+        if df_fr > 0 and crit_val_chi2_fr is not None and isinstance(crit_val_chi2_fr, (int,float)) and not np.isnan(crit_val_chi2_fr):
             p_val_calc_fr = stats.chi2.sf(test_stat_q_fr, df_fr)
             decision_crit_fr = test_stat_q_fr > crit_val_chi2_fr
             comparison_crit_str_fr = f"Q({test_stat_q_fr:.3f}) > χ²_crit({crit_val_chi2_fr:.3f})" if decision_crit_fr else f"Q({test_stat_q_fr:.3f}) ≤ χ²_crit({crit_val_chi2_fr:.3f})"
@@ -1548,7 +1641,7 @@ def tab_friedman_test():
 
 
         st.markdown(f"""
-        1.  **Critical χ²-value (df={df_fr})**: {crit_val_chi2_fr:.3f if crit_val_chi2_fr is not None and not np.isnan(crit_val_chi2_fr) else "N/A (df=0 implies k≤1)"}
+        1.  **Critical χ²-value (df={df_fr})**: {crit_val_chi2_fr_display}
             * *Associated p-value (α)*: {p_val_for_crit_val_fr_display:.4f}
         2.  **Calculated Q-statistic (χ²_r)**: {test_stat_q_fr:.3f}
             * *Calculated p-value (from χ² approx.)*: {p_val_calc_fr:.4f if not np.isnan(p_val_calc_fr) else "N/A"} ({apa_p_value(p_val_calc_fr)})
