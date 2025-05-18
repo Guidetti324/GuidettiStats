@@ -33,7 +33,9 @@ def place_label(ax, placed_list, x, y, txt, *, color="blue"):
             dy += 0.04
     ax.text(x + dx, y + dy, txt, color=color,
             ha="left", va="bottom", fontsize=8, clip_on=True)
-    placed_list.append((x + dx, y + dy))
+    if placed_list is not None: # Ensure placed_list is a list before appending
+        placed_list.append((x + dx, y + dy))
+
 
 def style_cell(html: str, cid: str, color: str = "red", px: int = 2) -> str:
     return html.replace(
@@ -61,7 +63,7 @@ CSS_BASE = (
 
 def plot_t(t_calc, df, input_alpha, tail):
     fig, ax = plt.subplots(figsize=(12, 4), dpi=100)
-    if not isinstance(df, (int, float)) or df <= 0: # Added type check for df
+    if not isinstance(df, (int, float)) or df <= 0:
         ax.text(0.5, 0.5, "Degrees of freedom (df) must be a positive number.", ha='center', va='center')
         return fig
         
@@ -82,10 +84,9 @@ def plot_t(t_calc, df, input_alpha, tail):
             actual_plot_crit = plot_crit_val_one_sided if t_calc >= 0 else -plot_crit_val_one_sided
             
             region_xs = xs[xs >= actual_plot_crit] if t_calc >= 0 else xs[xs <= actual_plot_crit]
-            # Ensure region_xs is not empty and corresponds to valid ys indices
             if region_xs.size > 0:
                 region_ys_indices = np.where(np.isin(xs, region_xs))[0]
-                if region_ys_indices.size > 0:
+                if region_ys_indices.size > 0 and region_ys_indices.max() < len(ys): # Boundary check for ys
                      ax.fill_between(region_xs, ys[region_ys_indices], color="red", alpha=0.3, label="Reject H0")
             
             ax.axvline(actual_plot_crit, color="green", ls="--")
@@ -127,7 +128,7 @@ def build_t_html(df: int, user_input_alpha: float, tail: str) -> str:
             current_diff = abs(h_alpha_val - user_input_alpha)
             if current_diff < min_diff_for_table:
                 min_diff_for_table = current_diff; best_match_info_for_table = {'index': i, 'alpha_val': h_alpha_val, 'is_exact': False}
-            elif current_diff == min_diff_for_table: # Tie-breaking
+            elif current_diff == min_diff_for_table:
                 if best_match_info_for_table and h_alpha_val < best_match_info_for_table['alpha_val']:
                      best_match_info_for_table = {'index': i, 'alpha_val': h_alpha_val, 'is_exact': False}
     
@@ -186,7 +187,6 @@ def t_apa(t_val: float, df: int, input_alpha: float, tail: str):
     except Exception as e: st.warning(f"Could not calc t-APA details: {e}")
     
     decision = "rejected" if reject else "failed to reject"
-    # Using original APA interpretation strings
     if reject:
         reason_stats = "because t(calc) exceeded t(crit)"
         reason_p = "because p < α" 
@@ -203,11 +203,11 @@ def t_apa(t_val: float, df: int, input_alpha: float, tail: str):
     if tail.startswith("one"):
         if t_val >= 0: expl_parts.append(f"For a **one-tailed** (right tail) test, the p-value is $1 - P(T \\le {t_val:.2f}) \\approx {1-cdf_val if not np.isnan(cdf_val) else np.nan:.4f}$.")
         else: expl_parts.append(f"For a **one-tailed** (left tail) test, the p-value is $P(T \\le {t_val:.2f}) \\approx {cdf_val:.4f}$.")
-    else: expl_parts.append(f"For a **two-tailed** test, the p-value is $2 \\times P(T \\ge |{t_val:.2f}|) \\approx {2*min(cdf_val, 1-cdf_val if not np.isnan(cdf_val) else 0.5):.4f}$.") # Handle cdf_val being nan
+    else: expl_parts.append(f"For a **two-tailed** test, the p-value is $2 \\times P(T \\ge |{t_val:.2f}|) \\approx {2*min(cdf_val, 1-cdf_val if not np.isnan(cdf_val) else 0.5):.4f}$.")
     expl_parts.append(f"The calculated p-value (more directly) is $p \\approx {p_calc_val:.4f}$.")
     st.write("\n\n".join(expl_parts))
     
-    st.markdown( # Original APA format
+    st.markdown(
         "**APA interpretation**\n"
         f"Calculated statistic: *$t$({df}) = {t_val:.2f}, *$p$ $\\approx$ {p_calc_val:.3f}.\n"
         f"Critical statistic for your input $\\alpha={input_alpha:.4f}$ ({tail}): $t_{{crit}} \\approx {crit_val_apa:.2f}$.\n"
@@ -220,17 +220,13 @@ def tab_t():
     st.subheader("Tab 1 • t-Distribution"); c1,c2=st.columns(2);
     with c1: t_val_in=st.number_input("t statistic",value=2.10,step=0.01,key="t_val_w"); df_in=st.number_input("df",min_value=1,value=10,step=1,key="t_df_w")
     with c2: alpha_in=st.number_input("Your $\\alpha$ (alpha level)",value=0.05,step=0.001,min_value=0.0001,max_value=0.99,format="%.4f",key="t_alpha_w"); tail_in=st.radio("Tail",["one-tailed","two-tailed"],key="t_tail_w",horizontal=True)
-    
-    # Using session state for button to persist its effect
     if 't_show_results' not in st.session_state: st.session_state.t_show_results = False
     if st.button("Generate Plot, Table & APA for t-Distribution", key="t_generate_w"): st.session_state.t_show_results = True
-    
     if st.session_state.t_show_results:
         try:
             fig_t = plot_t(float(t_val_in), int(df_in), float(alpha_in), tail_in)
             if fig_t: st.pyplot(fig_t)
         except Exception as e: st.error(f"Plot error: {e}")
-        
         st.write(f"**t-table** (Column highlight for table's closest $\\alpha$ to your input $\\alpha$={alpha_in:.4f})")
         ct_t,ce_t=st.columns([3,2])
         with ct_t:
@@ -248,7 +244,10 @@ def plot_z(z_calc, input_alpha, tail):
         if tail.startswith("one"):
             crit_z_plot = stats.norm.ppf(1 - input_alpha) if z_calc >=0 else stats.norm.ppf(input_alpha)
             region_z = xs[xs >= crit_z_plot] if z_calc >=0 else xs[xs <= crit_z_plot]
-            if region_z.size > 0: ax.fill_between(region_z, ys[np.isin(xs,region_z)], color="red", alpha=0.3, label="Reject H0")
+            if region_z.size > 0: 
+                region_ys_indices = np.where(np.isin(xs, region_z))[0]
+                if region_ys_indices.size > 0 and region_ys_indices.max() < len(ys):
+                    ax.fill_between(region_z, ys[region_ys_indices], color="red", alpha=0.3, label="Reject H0")
             ax.axvline(crit_z_plot, color="green", ls="--"); place_label(ax,placed_z,crit_z_plot,stats.norm.pdf(crit_z_plot)+0.02,f"z₍crit₎={crit_z_plot:.2f}",color="green")
         else:
             crit_z_plot = stats.norm.ppf(1 - input_alpha/2)
@@ -256,7 +255,7 @@ def plot_z(z_calc, input_alpha, tail):
             ax.axvline(crit_z_plot,color="green",ls="--"); ax.axvline(-crit_z_plot,color="green",ls="--")
             place_label(ax,placed_z,crit_z_plot,stats.norm.pdf(crit_z_plot)+0.02,f"+z₍crit₎={crit_z_plot:.2f}",color="green"); place_label(ax,placed_z,-crit_z_plot,stats.norm.pdf(-crit_z_plot)+0.02,f"–z₍crit₎={crit_z_plot:.2f}",color="green")
         ax.axvline(z_calc,color="blue",ls="--"); place_label(ax,placed_z,z_calc,stats.norm.pdf(z_calc)+0.02,f"z₍calc₎={z_calc:.2f}",color="blue")
-    except Exception as e: st.warning(f"Plot error for Z: {e}") # Added more specific error message
+    except Exception as e: st.warning(f"Plot error for Z: {e}")
     ax.set_xlabel("z"); ax.set_ylabel("Density"); ax.legend(loc='upper right'); ax.set_title(f"z-Distribution (input $\\alpha$={input_alpha:.4f})"); fig.tight_layout(); return fig
 
 def build_z_html(z_val: float) -> str:
@@ -293,7 +292,6 @@ def z_apa(z_val: float, input_alpha: float, tail: str):
     except Exception as e:st.warning(f"Z APA calc error: {e}")
     
     dec="rejected" if rej else "failed to reject"; 
-    # Using original reason_stats and reason_p from user's t_apa for consistency
     if rej: reason_stats = "because z₍calc₎ exceeded z₍crit₎"; reason_p = "because p < α"
     else: reason_stats = "because z₍calc₎ did not exceed z₍crit₎"; reason_p = "because p ≥ α"
     
@@ -311,26 +309,28 @@ def z_apa(z_val: float, input_alpha: float, tail: str):
     expl_z.append(f"Calculated $p \\approx {p_c:.4f}$.")
     st.write("\n\n".join(expl_z))
     
-    st.markdown( # Original APA format
+    st.markdown(
         "**APA interpretation**\n"
-        f"Calculated statistic: *$z$*={z_val:.2f}, *$p$ $\\approx$ {p_c:.3f}.\n"
+        f"Calculated statistic: *$z*={z_val:.2f}, *$p$ $\\approx$ {p_c:.3f}.\n"
         f"Critical statistic for your $\\alpha$={input_alpha:.4f} ({tail}): $z_{{crit}} \\approx {crit_z:.2f}.\n"
-        f"Statistic comparison $\\rightarrow$ H₀ **{dec}** ({reason_stats}).\n" # Using restored reason_stats
-        f"*$p$* comparison $\\rightarrow$ H₀ **{dec}** ({reason_p}).\n" # Using restored reason_p
+        f"Statistic comparison $\\rightarrow$ H₀ **{dec}** ({reason_stats}).\n"
+        f"*$p$* comparison $\\rightarrow$ H₀ **{dec}** ({reason_p}).\n"
         f"**APA 7 report:** *$z$*={z_val:.2f}, *$p$ $\\approx$ {p_c:.3f} ({tail}). Null hypothesis was **{dec}** at $\\alpha$={input_alpha:.2f}."
     )
 
 def tab_z():
     st.subheader("Tab 2 • z-Distribution"); c1,c2=st.columns(2)
-    with c1: z_val_in = st.number_input("z statistic",value=1.64,step=0.01,key="z_val_w_tab2") # Ensure unique keys
+    with c1: z_val_in = st.number_input("z statistic",value=1.64,step=0.01,key="z_val_w_tab2")
     with c2: alpha_in=st.number_input("Your $\\alpha$",value=0.05,step=0.001,min_value=0.0001,max_value=0.99,format="%.4f",key="z_alpha_w_tab2"); tail_in=st.radio("Tail",["one-tailed","two-tailed"],key="z_tail_w_tab2",horizontal=True)
     if 'z_show_results' not in st.session_state: st.session_state.z_show_results = False
     if st.button("Generate Plot, Table & APA for z-Distribution", key="z_generate_w_tab2"): st.session_state.z_show_results = True
     if st.session_state.z_show_results:
+        fig_z_dist = None # Initialize
         try: 
-            fig_z_dist=plot_z(float(z_val_in),float(alpha_in),tail_in); # Renamed fig_z to fig_z_dist
-            if fig_z_dist:st.pyplot(fig_z_dist) # Check if figure object is returned
+            fig_z_dist=plot_z(float(z_val_in),float(alpha_in),tail_in);
+            if fig_z_dist:st.pyplot(fig_z_dist)
         except Exception as e:st.error(f"Z-Plot error: {e}")
+        
         st.write("**z-table** (highlighted based on z-statistic value)")
         ct_z,ce_z=st.columns([3,2])
         with ct_z:
@@ -347,17 +347,27 @@ def plot_f(f_calc, df1, df2, input_alpha):
     try:
         crit_f_plot = stats.f.ppf(1 - input_alpha, df1, df2)
         ux = max(f_calc, crit_f_plot if not np.isnan(crit_f_plot) else f_calc, 5)*1.5
-        ppf_ux_f = stats.f.ppf(0.999,df1,df2); ux = ppf_ux_f*1.1 if not np.isnan(ppf_ux_f) and ppf_ux_f < ux else ux # Renamed ppf_ux to ppf_ux_f
-        xs=np.linspace(0,ux,400); ys=stats.f.pdf(xs,df1,df2); v=(~np.isnan(ys)&~np.isinf(ys)); xs,ys=xs[v],ys[v]
+        ppf_ux_f = stats.f.ppf(0.999,df1,df2); 
+        if not np.isnan(ppf_ux_f) and ppf_ux_f > 0 and ppf_ux_f < ux : ux = ppf_ux_f*1.1 # Check ppf_ux_f validity
+        
+        xs=np.linspace(0,max(ux, 0.1),400); # Ensure ux is positive for linspace
+        ys=stats.f.pdf(xs,df1,df2); 
+        v=(~np.isnan(ys)&~np.isinf(ys)); xs,ys=xs[v],ys[v]
         if len(xs)<2: ax.text(0.5,0.5,"Cannot generate F-PDF.",ha='center',va='center'); return fig
+        
         ax.plot(xs,ys,"k"); ax.fill_between(xs,ys,color="lightgrey",alpha=0.25,label="Fail to Reject H0")
         if not np.isnan(crit_f_plot):
-            if xs[xs>=crit_f_plot].size > 0: ax.fill_between(xs[xs>=crit_f_plot],ys[xs>=crit_f_plot],color="red",alpha=0.3,label="Reject H0")
+            region_f = xs[xs>=crit_f_plot]
+            if region_f.size > 0:
+                 region_f_ys_indices = np.where(np.isin(xs, region_f))[0]
+                 if region_f_ys_indices.size > 0 and region_f_ys_indices.max() < len(ys):
+                    ax.fill_between(region_f,ys[region_f_ys_indices],color="red",alpha=0.3,label="Reject H0")
             ax.axvline(crit_f_plot,color="green",ls="--")
             pdf_c=stats.f.pdf(crit_f_plot,df1,df2)
             if not np.isnan(pdf_c): place_label(ax,[],crit_f_plot,pdf_c+0.02,f"F₍crit₎={crit_f_plot:.2f}",color="green")
+        
         ax.axvline(f_calc,color="blue",ls="--")
-        pdf_f_calc = stats.f.pdf(f_calc,df1,df2) # Renamed pdf_f to pdf_f_calc
+        pdf_f_calc = stats.f.pdf(f_calc,df1,df2)
         if not np.isnan(pdf_f_calc): place_label(ax,[],f_calc,pdf_f_calc+0.02,f"F₍calc₎={f_calc:.2f}",color="blue")
     except Exception as e: st.warning(f"F-Plot elements error: {e}")
     ax.set_xlabel("F");ax.set_ylabel("Density");ax.legend(loc='upper right');ax.set_title(f"F-Dist (df1={df1:.0f},df2={df2:.0f}, input $\\alpha$={input_alpha:.4f})");fig.tight_layout();return fig
@@ -366,7 +376,7 @@ def build_f_table(df1: int, df2: int, input_alpha: float) -> str:
     rs=list(range(max(1,df1-2),df1+3+1)); cs=list(range(max(1,df2-2),df2+3+1)); ci=-1
     if df2 in cs: ci=cs.index(df2)+1
     hd="".join(f"<th>{c}</th>" for c in cs); bd=""
-    for r_f_row in rs: # Renamed r to r_f_row
+    for r_f_row in rs:
         rc=f'<td id="f_{r_f_row}_0">{r_f_row}</td>'
         for i,c_val in enumerate(cs,start=1):
             v=np.nan; 
@@ -378,7 +388,7 @@ def build_f_table(df1: int, df2: int, input_alpha: float) -> str:
     if df1 in rs:
         for i in range(len(cs)+1): ht=style_cell(ht,f"f_{df1}_{i}")
     if ci!=-1 and 1 <= ci <= len(cs):
-        for r_rr_f in rs: ht=style_cell(ht,f"f_{r_rr_f}_{ci}") # Renamed r_rr to r_rr_f
+        for r_rr_f in rs: ht=style_cell(ht,f"f_{r_rr_f}_{ci}")
         if df1 in rs:ht=style_cell(ht,f"f_{df1}_{ci}",color="blue",px=3)
     return ht
 
@@ -401,8 +411,10 @@ def tab_f():
     if 'f_show_results' not in st.session_state: st.session_state.f_show_results = False
     if st.button("Generate Plot, Table & APA for F-Distribution",key="f_gen_w_tab3"): st.session_state.f_show_results = True
     if st.session_state.f_show_results:
-        try: figf_dist=plot_f(float(fv),int(d1),int(d2),float(ai)); # Renamed figf to figf_dist
-             if figf_dist:st.pyplot(figf_dist)
+        figf_dist = None # Initialize
+        try: 
+            figf_dist=plot_f(float(fv),int(d1),int(d2),float(ai));
+            if figf_dist:st.pyplot(figf_dist)
         except Exception as e:st.error(f"F-Plot error: {e}")
         st.write("**F-table** (Values are F-crit for your input $\\alpha$. Always one-tailed.)")
         try: f_table(int(d1),int(d2),float(ai)); f_apa(float(fv),int(d1),int(d2),float(ai))
@@ -414,12 +426,16 @@ def plot_chi(chi_calc, df, input_alpha):
     if df<=0: ax.text(0.5,0.5,"df must be > 0.",ha='center',va='center'); return fig
     try:
         crit_c_plot=stats.chi2.ppf(1-input_alpha,df); ux_c=max(chi_calc,crit_c_plot if not np.isnan(crit_c_plot) else chi_calc,10)*1.5
-        ppf_ux_c=stats.chi2.ppf(0.999,df); ux_c=ppf_ux_c*1.1 if not np.isnan(ppf_ux_c) and ppf_ux_c<ux_c else ux_c
-        xs_c=np.linspace(0,ux_c,400); ys_c=stats.chi2.pdf(xs_c,df); v_c=(~np.isnan(ys_c)&~np.isinf(ys_c)); xs_c,ys_c=xs_c[v_c],ys_c[v_c]
+        ppf_ux_c=stats.chi2.ppf(0.999,df); ux_c=ppf_ux_c*1.1 if not np.isnan(ppf_ux_c) and ppf_ux_c > 0 and ppf_ux_c<ux_c else ux_c # Added >0 check
+        xs_c=np.linspace(0,max(ux_c, 0.1),400); ys_c=stats.chi2.pdf(xs_c,df); v_c=(~np.isnan(ys_c)&~np.isinf(ys_c)); xs_c,ys_c=xs_c[v_c],ys_c[v_c]
         if len(xs_c)<2: ax.text(0.5,0.5,"Cannot generate Chi-PDF.",ha='center',va='center'); return fig
         ax.plot(xs_c,ys_c,"k"); ax.fill_between(xs_c,ys_c,color="lightgrey",alpha=0.25,label="Fail to Reject H0")
         if not np.isnan(crit_c_plot):
-            if xs_c[xs_c>=crit_c_plot].size > 0: ax.fill_between(xs_c[xs_c>=crit_c_plot],ys_c[xs_c>=crit_c_plot],color="red",alpha=0.3,label="Reject H0")
+            region_chi = xs_c[xs_c>=crit_c_plot]
+            if region_chi.size > 0:
+                region_chi_ys_indices = np.where(np.isin(xs_c, region_chi))[0]
+                if region_chi_ys_indices.size > 0 and region_chi_ys_indices.max() < len(ys_c):
+                    ax.fill_between(region_chi,ys_c[region_chi_ys_indices],color="red",alpha=0.3,label="Reject H0")
             ax.axvline(crit_c_plot,color="green",ls="--")
             pdf_cc=stats.chi2.pdf(crit_c_plot,df)
             if not np.isnan(pdf_cc):place_label(ax,[],crit_c_plot,pdf_cc+0.02,f"χ²₍crit₎={crit_c_plot:.2f}",color="green")
@@ -434,15 +450,15 @@ def build_chi_table(df: int, alpha_for_highlight: float) -> str:
     if alpha_for_highlight in std_as: ci_c=std_as.index(alpha_for_highlight)+1
     else: 
         md_c=float('inf')
-        for i_chi_build,sa_chi_build in enumerate(std_as,start=1): # Renamed i,sa to avoid conflict
+        for i_chi_build,sa_chi_build in enumerate(std_as,start=1):
             if abs(sa_chi_build-alpha_for_highlight)<md_c: md_c=abs(sa_chi_build-alpha_for_highlight); ci_c=i_chi_build
-        if ci_c!=-1 and std_as and ci_c <= len(std_as) : st.warning(f"Table $\\alpha$ {alpha_for_highlight:.4f} for highlight not exact, using closest: {std_as[ci_c-1]:.3f}.")
+        if ci_c!=-1 and std_as and 0 <= ci_c-1 < len(std_as) : st.warning(f"Table $\\alpha$ {alpha_for_highlight:.4f} for highlight not exact, using closest: {std_as[ci_c-1]:.3f}.")
         elif not std_as: ci_c = 1 
         else: ci_c=1 
     hd_c="".join(f"<th>{a:.3f}</th>" for a in std_as);bd_c=""
-    for r_chi_row in rs_c: # Renamed r to r_chi_row
+    for r_chi_row in rs_c:
         rc_c=f'<td id="chi_{r_chi_row}_0">{r_chi_row}</td>'
-        for i_chi_cell,ac_chi_cell in enumerate(std_as,start=1): # Renamed i,ac to avoid conflict
+        for i_chi_cell,ac_chi_cell in enumerate(std_as,start=1):
             vc=np.nan; 
             try: vc=stats.chi2.ppf(1-ac_chi_cell,r_chi_row)
             except Exception: pass 
@@ -450,9 +466,9 @@ def build_chi_table(df: int, alpha_for_highlight: float) -> str:
         bd_c+=f"<tr>{rc_c}</tr>"
     cdc=f"<tr><th>df\\α</th>{hd_c}</tr>{bd_c}";htc=wrap_table(CSS_BASE,cdc)
     if df in rs_c:
-        for i_chi_hl in range(len(std_as)+1): htc=style_cell(htc,f"chi_{df}_{i_chi_hl}") # Renamed i to i_chi_hl
+        for i_chi_hl in range(len(std_as)+1): htc=style_cell(htc,f"chi_{df}_{i_chi_hl}")
     if ci_c!=-1 and 1 <= ci_c <= len(std_as): 
-        for rr_chi_hl in rs_c:htc=style_cell(htc,f"chi_{rr_chi_hl}_{ci_c}") # Renamed rr to rr_chi_hl
+        for rr_chi_hl in rs_c:htc=style_cell(htc,f"chi_{rr_chi_hl}_{ci_c}")
         if df in rs_c:htc=style_cell(htc,f"chi_{df}_{ci_c}",color="blue",px=3)
     return htc
 
@@ -475,8 +491,10 @@ def tab_chi():
     if 'chi_show_results' not in st.session_state: st.session_state.chi_show_results = False
     if st.button("Generate Plot, Table & APA for Chi-Square",key="c_gen_w_tab4"): st.session_state.chi_show_results = True
     if st.session_state.chi_show_results:
-        try: figc_dist=plot_chi(float(cv_in),int(dfi_in),float(aia_in)); # Renamed figc to figc_dist
-             if figc_dist:st.pyplot(figc_dist)
+        figc_dist=None # Initialize
+        try: 
+            figc_dist=plot_chi(float(cv_in),int(dfi_in),float(aia_in));
+            if figc_dist:st.pyplot(figc_dist)
         except Exception as e:st.error(f"Chi-Plot error: {e}")
         st.write(f"**χ²-table** (Table columns show standard $\\alpha$'s. Column for selected table $\\alpha$={afth_in} is highlighted.)")
         try: chi_table(int(dfi_in),float(afth_in)); chi_apa(float(cv_in),int(dfi_in),float(aia_in))
@@ -494,7 +512,7 @@ def plot_u(u_calc, n1, n2, input_alpha, tail):
         plot_min_x = max(0, u_calc - (3 * sigma_u if sigma_u > 1e-9 else 1) -1) 
         plot_max_x = u_calc + (3 * sigma_u if sigma_u > 1e-9 else 1) + 1
         if plot_min_x >= plot_max_x: 
-             plot_max_x = plot_min_x + 2.0 # Ensure max is greater
+             plot_max_x = plot_min_x + 2.0 
 
     xs = np.linspace(plot_min_x, plot_max_x, 400); ys = stats.norm.pdf(xs, mu_u, sigma_u)
     valid_ys_u = ~np.isnan(ys) & ~np.isinf(ys); xs, ys = xs[valid_ys_u], ys[valid_ys_u]
@@ -505,19 +523,34 @@ def plot_u(u_calc, n1, n2, input_alpha, tail):
         if tail.startswith("one"):
             if u_calc <= mu_u: 
                 zc=stats.norm.ppf(input_alpha); cu=floor(mu_u+zc*sigma_u)
-                if xs[xs<=cu].size > 0: ax.fill_between(xs[xs<=cu],ys[np.where(xs<=cu)[0]],color="red",alpha=0.3,label="Reject H0") # Corrected ys indexing
+                region_u_l = xs[xs<=cu]
+                if region_u_l.size > 0: 
+                    region_u_l_ys_idx = np.where(np.isin(xs, region_u_l))[0]
+                    if region_u_l_ys_idx.size > 0 and region_u_l_ys_idx.max() < len(ys):
+                        ax.fill_between(region_u_l,ys[region_u_l_ys_idx],color="red",alpha=0.3,label="Reject H0")
                 ax.axvline(cu,color="green",ls="--")
                 if not np.isnan(stats.norm.pdf(cu,mu_u,sigma_u)): place_label(ax,placed_u_p,cu,stats.norm.pdf(cu,mu_u,sigma_u)+0.005,f"Ucrit L≈{cu}",color="green")
             else: 
                 zc=stats.norm.ppf(1-input_alpha); cu=ceil(mu_u+zc*sigma_u)
-                if xs[xs>=cu].size > 0: ax.fill_between(xs[xs>=cu],ys[np.where(xs>=cu)[0]],color="red",alpha=0.3,label="Reject H0") # Corrected ys indexing
+                region_u_u = xs[xs>=cu]
+                if region_u_u.size > 0:
+                    region_u_u_ys_idx = np.where(np.isin(xs, region_u_u))[0]
+                    if region_u_u_ys_idx.size > 0 and region_u_u_ys_idx.max() < len(ys):
+                        ax.fill_between(region_u_u,ys[region_u_u_ys_idx],color="red",alpha=0.3,label="Reject H0")
                 ax.axvline(cu,color="green",ls="--")
                 if not np.isnan(stats.norm.pdf(cu,mu_u,sigma_u)): place_label(ax,placed_u_p,cu,stats.norm.pdf(cu,mu_u,sigma_u)+0.005,f"Ucrit U≈{cu}",color="green")
         else:
             zcl=stats.norm.ppf(input_alpha/2); cul=floor(mu_u+zcl*sigma_u)
             zcu=stats.norm.ppf(1-input_alpha/2); cuu=ceil(mu_u+zcu*sigma_u) 
-            if xs[xs<=cul].size > 0: ax.fill_between(xs[xs<=cul],ys[np.where(xs<=cul)[0]],color="red",alpha=0.3) # Corrected ys indexing
-            if xs[xs>=cuu].size > 0: ax.fill_between(xs[xs>=cuu],ys[np.where(xs>=cuu)[0]],color="red",alpha=0.3,label="Reject H0") # Corrected ys indexing
+            region_u_2l = xs[xs<=cul]; region_u_2u = xs[xs>=cuu]
+            if region_u_2l.size > 0:
+                region_u_2l_ys_idx = np.where(np.isin(xs, region_u_2l))[0]
+                if region_u_2l_ys_idx.size > 0 and region_u_2l_ys_idx.max() < len(ys):
+                     ax.fill_between(region_u_2l,ys[region_u_2l_ys_idx],color="red",alpha=0.3)
+            if region_u_2u.size > 0:
+                region_u_2u_ys_idx = np.where(np.isin(xs, region_u_2u))[0]
+                if region_u_2u_ys_idx.size > 0 and region_u_2u_ys_idx.max() < len(ys):
+                    ax.fill_between(region_u_2u,ys[region_u_2u_ys_idx],color="red",alpha=0.3,label="Reject H0")
             ax.axvline(cul,color="green",ls="--"); ax.axvline(cuu,color="green",ls="--")
             if not np.isnan(stats.norm.pdf(cul,mu_u,sigma_u)): place_label(ax,placed_u_p,cul,stats.norm.pdf(cul,mu_u,sigma_u)+0.005,f"Ucrit L≈{cul}",color="green")
             if not np.isnan(stats.norm.pdf(cuu,mu_u,sigma_u)): place_label(ax,placed_u_p,cuu,stats.norm.pdf(cuu,mu_u,sigma_u)+0.005,f"Ucrit U≈{cuu}",color="green")
@@ -538,16 +571,16 @@ def build_u_table(n1:int, n2:int, input_alpha:float, tail:str)->str:
     rs_u=list(range(max(2,n1-2),n1+3+1)); cs_u=list(range(max(2,n2-2),n2+3+1)); ci_u=-1
     if n2 in cs_u: ci_u=cs_u.index(n2)+1
     hd_u="".join(f"<th>$n_2$={c}</th>" for c in cs_u);bd_u=""
-    for r_u_row in rs_u: # Renamed r to r_u_row
+    for r_u_row in rs_u:
         rc_u=f'<td id="u_{r_u_row}_0">$n_1$={r_u_row}</td>'
-        for i_u_cell,c_val_u_cell in enumerate(cs_u,start=1): # Renamed i, c_val to avoid conflict
+        for i_u_cell,c_val_u_cell in enumerate(cs_u,start=1):
             v_u=u_crit(r_u_row,c_val_u_cell,input_alpha,tail); rc_u+=f'<td id="u_{r_u_row}_{i_u_cell}">{v_u if not np.isnan(v_u) else "N/A"}</td>'
         bd_u+=f"<tr>{rc_u}</tr>"
     cde_u=f"<tr><th>$n_1 \\setminus n_2$</th>{hd_u}</tr>{bd_u}";ht_u=wrap_table(CSS_BASE,cde_u)
     if n1 in rs_u:
-        for i_u_hl in range(len(cs_u)+1):ht_u=style_cell(ht_u,f"u_{n1}_{i_u_hl}") # Renamed i to i_u_hl
-    if ci_u!=-1 and 1 <= ci_u <= len(cs_u): # Added bounds check for ci_u
-        for rr_u_hl in rs_u: ht_u=style_cell(ht_u,f"u_{rr_u_hl}_{ci_u}") # Renamed rr_u to rr_u_hl
+        for i_u_hl in range(len(cs_u)+1):ht_u=style_cell(ht_u,f"u_{n1}_{i_u_hl}")
+    if ci_u!=-1 and 1 <= ci_u <= len(cs_u):
+        for rr_u_hl in rs_u: ht_u=style_cell(ht_u,f"u_{rr_u_hl}_{ci_u}")
         if n1 in rs_u: ht_u=style_cell(ht_u,f"u_{n1}_{ci_u}",color="blue",px=3)
     return ht_u
 
@@ -577,7 +610,7 @@ def u_apa(u_val: int, n1: int, n2: int, input_alpha: float, tail: str):
         expl_u_list.append(f"The cumulative probability $P(Z \\le Z_{{approx}}) \\approx {cdf_za:.4f}$.")
         if tail.startswith("one"):
             if za <=0 : expl_u_list.append(f"For a **one-tailed** test (e.g., $U$ significantly small), $p \\approx P(Z \\le Z_{{approx}}) \\approx {cdf_za:.4f}$.")
-            else: expl_u_list.append(f"For a **one-tailed** test (e.g., $U$ significantly large), $p \\approx 1 - P(Z \\le Z_{{approx}}) \\approx {1-cdf_za if not np.isnan(cdf_za) else np.nan:.4f}$.") # Handle nan for cdf_za
+            else: expl_u_list.append(f"For a **one-tailed** test (e.g., $U$ significantly large), $p \\approx 1 - P(Z \\le Z_{{approx}}) \\approx {1-cdf_za if not np.isnan(cdf_za) else np.nan:.4f}$.")
         else: expl_u_list.append(f"For a **two-tailed** test, $p \\approx 2 \\times P(Z \\ge |Z_{{approx}}|) \\approx {pc_u:.4f}$.")
         expl_u_list.append(f"The calculated p-value is $p \\approx {pc_u:.4f}$.")
     else: expl_u_list.append("Cannot provide detailed explanation as $\\sigma_U$ is zero.")
@@ -587,18 +620,20 @@ def u_apa(u_val: int, n1: int, n2: int, input_alpha: float, tail: str):
 
 def tab_u():
     st.subheader("Tab 5 • Mann-Whitney U Distribution");c1,c2=st.columns(2)
-    with c1:u_v_in=st.number_input("U stat val",min_value=0,value=23,step=1,key="u_v_w_tab5");n1v_in=st.number_input("n1 (samp1)",min_value=1,value=8,step=1,key="u_n1_w_tab5") # Unique keys
+    with c1:u_v_in=st.number_input("U stat val",min_value=0,value=23,step=1,key="u_v_w_tab5");n1v_in=st.number_input("n1 (samp1)",min_value=1,value=8,step=1,key="u_n1_w_tab5")
     with c2:n2v_in=st.number_input("n2 (samp2)",min_value=1,value=10,step=1,key="u_n2_w_tab5");aiv_in=st.number_input("Your $\\alpha$ for U",value=0.05,step=0.001,min_value=0.0001,max_value=0.99,format="%.4f",key="u_ai_w_tab5");tiv_in=st.radio("Tail for U",["one-tailed","two-tailed"],key="u_ti_w_tab5",horizontal=True)
     if 'u_show_results' not in st.session_state: st.session_state.u_show_results = False
     if st.button("Generate Plot, Table & APA for Mann-Whitney U",key="u_gen_w_tab5"): st.session_state.u_show_results = True
     if st.session_state.u_show_results:
         if int(n1v_in)<1 or int(n2v_in)<1:st.error("n1 and n2 must be >= 1.")
         else:
-            try: fig_u_dist=plot_u(int(u_v_in),int(n1v_in),int(n2v_in),float(aiv_in),tiv_in); # Renamed fig_u to fig_u_dist
-                 if fig_u_dist:st.pyplot(fig_u_dist)
+            fig_u_dist = None # Initialize
+            try: 
+                fig_u_dist=plot_u(int(u_v_in),int(n1v_in),int(n2v_in),float(aiv_in),tiv_in);
+                if fig_u_dist:st.pyplot(fig_u_dist)
             except Exception as e:st.error(f"U-Plot error: {e}")
             st.write("**U-table** (Approx. Lower Crit U's for your input $\\alpha$)")
-            ct_u_main,ce_u_main=st.columns([3,2]) # Renamed ct_u, ce_u to avoid conflict
+            ct_u_main,ce_u_main=st.columns([3,2])
             with ct_u_main:
                 try: u_table(int(n1v_in),int(n2v_in),float(aiv_in),tiv_in); st.info("U-table shows approx. lower crit U's for *your input α*. Reject H₀ if obs. U ≤ table U (for appropriate tail).")
                 except Exception as e:st.error(f"U-Table error: {e}");st.exception(e)
