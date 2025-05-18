@@ -129,7 +129,7 @@ def tab_t_distribution():
         alpha_t = st.number_input("Alpha (α)", 0.0001, 0.5, 0.05, 0.0001, format="%.4f", key="alpha_t")
         
         df_options = list(range(1, 31)) + [40, 60, 80, 100, 1000, 'z (∞)']
-        df_t_display = st.selectbox("Degrees of Freedom (df)", options=df_options, index=9) 
+        df_t_display = st.selectbox("Degrees of Freedom (df) for Table Lookup & Plot", options=df_options, index=9, key="df_t_display_selectbox") 
 
         if df_t_display == 'z (∞)':
             df_t_calc = np.inf
@@ -152,8 +152,10 @@ def tab_t_distribution():
             crit_func_pdf = stats.norm.pdf
         else: 
             dist_label = f't-distribution (df={df_t_calc})'
-            plot_min_t = min(stats.t.ppf(0.0001, df_t_calc), test_stat_t - 2*(stats.t.std(df_t_calc) if df_t_calc > 0 else 1), -4.0)
-            plot_max_t = max(stats.t.ppf(0.9999, df_t_calc), test_stat_t + 2*(stats.t.std(df_t_calc) if df_t_calc > 0 else 1), 4.0)
+            # Handle df_t_calc = 0 for std if it somehow occurs, though selectbox prevents it
+            std_dev_t = stats.t.std(df_t_calc) if df_t_calc > 0 else 1 
+            plot_min_t = min(stats.t.ppf(0.0001, df_t_calc), test_stat_t - 2*std_dev_t, -4.0)
+            plot_max_t = max(stats.t.ppf(0.9999, df_t_calc), test_stat_t + 2*std_dev_t, 4.0)
             x_t = np.linspace(plot_min_t, plot_max_t, 500)
             y_t = stats.t.pdf(x_t, df_t_calc)
             crit_func_ppf = lambda q: stats.t.ppf(q, df_t_calc)
@@ -204,113 +206,112 @@ def tab_t_distribution():
         st.pyplot(fig_t)
 
         st.subheader("t-Value Table")
+        # Define standard alpha levels for columns (one-tailed)
         one_tail_alphas_cols = [0.25, 0.10, 0.05, 0.025, 0.01, 0.005, 0.001, 0.0005]
         
-        # Create MultiIndex for columns
-        multi_index_tuples = []
-        for alpha_one in one_tail_alphas_cols:
-            multi_index_tuples.append(('One-Tail α', f'{alpha_one:.4f}'))
-        for alpha_one in one_tail_alphas_cols:
-            multi_index_tuples.append(('Two-Tails α', f'{alpha_one*2:.4f}'))
-        
-        # To ensure unique column names if some alpha*2 overlap with one-tail alphas
-        # We will build the data first, then construct the DataFrame with appropriate columns
-        
-        data_for_df = {}
-        index_labels = []
-
-        for df_val_display in df_options:
-            index_labels.append(str(df_val_display)) # Ensure index labels are strings
-            current_df_calc = np.inf if df_val_display == 'z (∞)' else int(df_val_display)
-            row_values = []
+        df_rows_data = []
+        for df_val_iter_display in df_options: # Iterate through the same df_options for table rows
+            row = {'df': str(df_val_iter_display)}
+            current_df_iter_calc = np.inf if df_val_iter_display == 'z (∞)' else int(df_val_iter_display)
+            
             for one_alpha in one_tail_alphas_cols:
-                if np.isinf(current_df_calc):
+                col_name_one_tail = f'α₁={one_alpha:.4f}'
+                col_name_two_tail = f'α₂={one_alpha*2:.4f}' # This is for header display
+                
+                if np.isinf(current_df_iter_calc):
                     crit_val = stats.norm.ppf(1 - one_alpha)
                 else:
-                    crit_val = stats.t.ppf(1 - one_alpha, current_df_calc)
-                row_values.append(f"{crit_val:.3f}" if not np.isnan(crit_val) else "N/A")
-            data_for_df[str(df_val_display)] = row_values
+                    crit_val = stats.t.ppf(1 - one_alpha, current_df_iter_calc)
+                
+                formatted_crit_val = f"{crit_val:.3f}" if not np.isnan(crit_val) else "N/A"
+                
+                # Store under one-tail alpha key for data structure
+                row[col_name_one_tail] = formatted_crit_val
+            df_rows_data.append(row)
+        
+        # Create DataFrame with df as index
+        df_t_table = pd.DataFrame(df_rows_data).set_index('df')
+        
+        # Create display columns (one-tail and two-tail headers)
+        display_columns = []
+        column_map_for_highlighting = {} # To map user alpha to actual data column
 
-        # Transpose and set up columns
-        df_t_table_intermediate = pd.DataFrame(data_for_df, index=[f'{a:.4f}' for a in one_tail_alphas_cols]).T
-        
-        # Create the final display DataFrame with multi-level columns
-        final_columns_one_tail = pd.MultiIndex.from_product([['Area in One Tail'], [f'{a:.4f}' for a in one_tail_alphas_cols]])
-        final_columns_two_tail = pd.MultiIndex.from_product([['Area in Two Tails'], [f'{a*2:.4f}' for a in one_tail_alphas_cols]])
+        for one_alpha in one_tail_alphas_cols:
+            one_tail_col_header = f'α₁={one_alpha:.4f}'
+            two_tail_col_header = f'α₂={one_alpha*2:.4f}'
+            display_columns.append(one_tail_col_header)
+            column_map_for_highlighting[one_alpha] = {'one_tail_col': one_tail_col_header, 'value_col': one_tail_col_header}
+            column_map_for_highlighting[one_alpha*2] = {'two_tail_col': two_tail_col_header, 'value_col': one_tail_col_header}
 
-        df_display_one_tail = df_t_table_intermediate.copy()
-        df_display_one_tail.columns = final_columns_one_tail
-        
-        df_display_two_tail = df_t_table_intermediate.copy() # Values are the same, just different header
-        df_display_two_tail.columns = final_columns_two_tail
 
-        # For display, we can show them side-by-side or one after another.
-        # Let's try to make it wide, similar to the screenshot.
-        # The screenshot has one-tail and two-tails as separate rows in the header.
+        # For the display table, we want to show one-tail and two-tail interpretations clearly
+        # The actual values are all t_{alpha_one_tail}
+        # We can construct a multi-index header for display if needed, or use simple headers.
+        # Let's use a simpler flat structure but with clear column names for α₁ and α₂.
         
-        # Rebuilding df_t_table with the desired structure
-        header_tuples = [('df', '')]
-        for alpha_val in one_tail_alphas_cols:
-            header_tuples.append(('One-Tail', f'{alpha_val:.4f}'))
-            header_tuples.append(('Two-Tails', f'{alpha_val*2:.4f}'))
-        
-        # Simpler approach: create a flat table and then style headers if possible, or use a clear layout
-        # The screenshot has "one-tail" and "two-tails" as sub-headers for the alpha values.
-        # Pandas styling can't easily create that exact header structure directly in HTML.
-        # Let's make two clear sets of columns instead.
-        
-        df_rows = []
-        for df_val_display in df_options:
-            row = {'df': str(df_val_display)}
-            current_df_calc = np.inf if df_val_display == 'z (∞)' else int(df_val_display)
-            for one_alpha in one_tail_alphas_cols:
-                if np.isinf(current_df_calc):
-                    crit_val = stats.norm.ppf(1 - one_alpha)
+        df_display_table_rows = []
+        for df_val_iter_display in df_options:
+            row_dict = {'df': str(df_val_iter_display)}
+            current_df_iter_calc = np.inf if df_val_iter_display == 'z (∞)' else int(df_val_iter_display)
+            for one_alpha_col_val in one_tail_alphas_cols: # These are the actual one-tail alphas used for ppf
+                if np.isinf(current_df_iter_calc):
+                    crit_val_for_col = stats.norm.ppf(1-one_alpha_col_val)
                 else:
-                    crit_val = stats.t.ppf(1 - one_alpha, current_df_calc)
-                row[f'α₁={one_alpha:.4f}'] = f"{crit_val:.3f}" if not np.isnan(crit_val) else "N/A"
-                row[f'α₂={one_alpha*2:.4f}'] = f"{crit_val:.3f}" if not np.isnan(crit_val) else "N/A" # Value is t_{alpha_one}
-            df_rows.append(row)
-        
-        df_t_table = pd.DataFrame(df_rows).set_index('df')
+                    crit_val_for_col = stats.t.ppf(1-one_alpha_col_val, current_df_iter_calc)
+                
+                formatted_cv = f"{crit_val_for_col:.3f}" if not np.isnan(crit_val_for_col) else "N/A"
+                row_dict[f"α₁={one_alpha_col_val:.4f}"] = formatted_cv
+                row_dict[f"α₂={one_alpha_col_val*2:.4f}"] = formatted_cv # Same value, different interpretation
+            df_display_table_rows.append(row_dict)
+
+        df_t_table_display = pd.DataFrame(df_display_table_rows).set_index('df')
+
 
         # Styling function
-        def highlight_t_table_flat(data):
+        def highlight_t_table_flat(styled_df):
+            # styled_df is a Styler object, access data via styled_df.data
+            data = styled_df.data
             attr_df = pd.DataFrame('', index=data.index, columns=data.columns)
-            selected_df_str = str(df_t_display)
+            selected_df_str = str(df_t_display) # df_t_display is from the selectbox
 
             # Highlight selected DF row
             if selected_df_str in data.index:
                 attr_df.loc[selected_df_str, :] = 'background-color: lightblue;'
             
-            target_col_name_part = ""
-            target_cell_col_name = None
-
+            target_alpha_for_style = alpha_t # User's input alpha
+            highlight_col_name = None # The column name in df_t_table_display to highlight
+            
             if tail_t == "Two-tailed":
-                target_col_name_part = f'α₂={alpha_t:.4f}' # User's alpha is the two-tailed alpha
-                # The actual critical value comes from one-tailed alpha_t/2
-                one_tail_alpha_for_crit = alpha_t / 2
-                # Find the closest one-tail alpha in our predefined columns
-                closest_one_tail_col = min(one_tail_alphas_cols, key=lambda x:abs(x-one_tail_alpha_for_crit))
-                target_cell_col_name = f'α₂={closest_one_tail_col*2:.4f}' # This column contains t_{closest_one_tail_col}
-            else: # One-tailed
-                target_col_name_part = f'α₁={alpha_t:.4f}'
-                closest_one_tail_col = min(one_tail_alphas_cols, key=lambda x:abs(x-alpha_t))
-                target_cell_col_name = f'α₁={closest_one_tail_col:.4f}'
-
-
-            # Highlight selected Alpha column(s)
-            for col_name in data.columns:
-                if target_col_name_part in col_name: # Looser match for column header highlight
-                     attr_df.loc[:, col_name] = attr_df.loc[:, col_name].astype(str) + ' background-color: lightgreen;'
+                # User's alpha_t is the two-tail alpha. Find the column header α₂=alpha_t
+                # The actual critical value is t_{alpha_t/2}
+                # We need to find the column for α₂ that is closest to user's alpha_t
+                # And the cell value comes from the α₁ column that is alpha_t/2
                 
-                # Highlight specific cell more precisely
-                if col_name == target_cell_col_name and selected_df_str in data.index:
-                    attr_df.loc[selected_df_str, col_name] += ' font-weight: bold; border: 2px solid red;'
+                # Find the two-tail column header closest to user's alpha_t
+                closest_two_tail_header_alpha = min([a*2 for a in one_tail_alphas_cols], key=lambda x:abs(x-target_alpha_for_style))
+                highlight_col_name = f'α₂={closest_two_tail_header_alpha:.4f}'
+
+                # For cell highlighting, find the one-tail alpha that is alpha_t/2
+                one_tail_alpha_for_cell = target_alpha_for_style / 2.0
+                closest_one_tail_for_cell_val = min(one_tail_alphas_cols, key=lambda x:abs(x-one_tail_alpha_for_cell))
+                # The cell to highlight is in the column for this two_tail_header, and its value is t_{closest_one_tail_for_cell_val}
+                # This means the value is actually in the column α₁={closest_one_tail_for_cell_val}
+                # But we highlight the column 'α₂=...' and the cell under it.
+
+            else: # One-tailed
+                # User's alpha_t is the one-tail alpha. Find the column header α₁=alpha_t
+                closest_one_tail_header_alpha = min(one_tail_alphas_cols, key=lambda x:abs(x-target_alpha_for_style))
+                highlight_col_name = f'α₁={closest_one_tail_header_alpha:.4f}'
+
+            # Apply column and cell highlighting
+            if highlight_col_name and highlight_col_name in data.columns:
+                attr_df.loc[:, highlight_col_name] = attr_df.loc[:, highlight_col_name].astype(str) + ' background-color: lightgreen;'
+                if selected_df_str in data.index:
+                    attr_df.loc[selected_df_str, highlight_col_name] += ' font-weight: bold; border: 2px solid red;'
             
             return attr_df
 
-        st.markdown(df_t_table.style.set_table_styles([{'selector': 'th', 'props': [('font-size', '10pt'), ('text-align', 'center')]},
+        st.markdown(df_t_table_display.style.set_table_styles([{'selector': 'th', 'props': [('font-size', '10pt'), ('text-align', 'center')]},
                                                        {'selector': 'td', 'props': [('text-align', 'center')]}])
                                      .apply(highlight_t_table_flat, axis=None).to_html(), unsafe_allow_html=True)
         st.caption(f"Highlighted row for df={df_t_display}, column for selected α={alpha_t:.4f} ({tail_t}), and specific critical value in red. α₁: One-Tail, α₂: Two-Tails.")
@@ -385,7 +386,7 @@ def tab_t_distribution():
             *{stat_symbol}*({df_report_str}) = {test_stat_t:.2f}, {apa_p_value(p_val_calc)}. The null hypothesis was {'rejected' if decision_p_alpha else 'not rejected'} at the α = {alpha_t:.2f} level.
         """)
 
-# --- Tab 2: z-distribution ---
+# --- Tab 2: z-distribution (No changes from previous version, assumed to be working) ---
 def tab_z_distribution():
     st.header("z-Distribution (Normal) Explorer")
     col1, col2 = st.columns([2, 1.5])
@@ -528,7 +529,7 @@ def tab_z_distribution():
             *z* = {test_stat_z:.2f}, {apa_p_value(p_val_calc_z)}. The null hypothesis was {'rejected' if decision_p_alpha_z else 'not rejected'} at α = {alpha_z:.2f}.
         """)
 
-# --- Tab 3: F-distribution ---
+# --- Tab 3: F-distribution (No changes from previous version, assumed to be working) ---
 def tab_f_distribution():
     st.header("F-Distribution Explorer")
     col1, col2 = st.columns([2, 1.5])
@@ -665,7 +666,7 @@ def tab_f_distribution():
             *F*({dfn_f}, {dfd_f}) = {test_stat_f:.2f}, {apa_p_value(p_val_calc_f)}. The null hypothesis was {'rejected' if decision_p_alpha_f else 'not rejected'} at α = {alpha_f:.2f}.
         """)
 
-# --- Tab 4: Chi-square distribution ---
+# --- Tab 4: Chi-square distribution (No changes from previous version, assumed to be working) ---
 def tab_chi_square_distribution():
     st.header("Chi-square (χ²) Distribution Explorer")
     col1, col2 = st.columns([2, 1.5])
@@ -799,7 +800,7 @@ def tab_chi_square_distribution():
             χ²({df_chi2}) = {test_stat_chi2:.2f}, {apa_p_value(p_val_calc_chi2)}. The null hypothesis was {'rejected' if decision_p_alpha_chi2 else 'not rejected'} at α = {alpha_chi2:.2f}.
         """)
 
-# --- Tab 5: Mann-Whitney U Test ---
+# --- Tab 5: Mann-Whitney U Test (No changes from previous version, assumed to be working) ---
 def tab_mann_whitney_u():
     st.header("Mann-Whitney U Test (Normal Approximation)")
     col1, col2 = st.columns([2, 1.5])
@@ -964,7 +965,7 @@ def tab_mann_whitney_u():
             A Mann-Whitney U test indicated that the outcome for group 1 (n<sub>1</sub>={n1_mw}) was {'' if decision_p_alpha_mw else 'not '}statistically significantly different from group 2 (n<sub>2</sub>={n2_mw}), *U* = {u_stat_mw:.1f}, *z* = {z_calc_mw:.2f}, {apa_p_value(p_val_calc_mw)}. The null hypothesis was {'rejected' if decision_p_alpha_mw else 'not rejected'} at α = {alpha_mw:.2f}.
         """)
 
-# --- Tab 6: Wilcoxon Signed-Rank T Test ---
+# --- Tab 6: Wilcoxon Signed-Rank T Test (No changes from previous version, assumed to be working) ---
 def tab_wilcoxon_t():
     st.header("Wilcoxon Signed-Rank T Test (Normal Approximation)")
     col1, col2 = st.columns([2, 1.5])
@@ -1130,7 +1131,7 @@ def tab_wilcoxon_t():
             A Wilcoxon signed-rank test indicated that the median difference was {'' if decision_p_alpha_w else 'not '}statistically significant, *T* = {t_stat_w:.1f}, *z* = {z_calc_w:.2f}, {apa_p_value(p_val_calc_w)}. The null hypothesis was {'rejected' if decision_p_alpha_w else 'not rejected'} at α = {alpha_w:.2f} (n={n_w}).
         """)
 
-# --- Tab 7: Binomial Test ---
+# --- Tab 7: Binomial Test (No changes from previous version, assumed to be working) ---
 def tab_binomial_test():
     st.header("Binomial Test Explorer")
     col1, col2 = st.columns([2, 1.5])
@@ -1267,7 +1268,7 @@ def tab_binomial_test():
             A binomial test was performed to assess whether the proportion of successes (k={k_success_b}, n={n_b}) was different from the null hypothesis proportion of p₀={p_null_b}. The result was {'' if decision_p_alpha_b else 'not '}statistically significant, {apa_p_value(p_val_calc_b)}. The null hypothesis was {'rejected' if decision_p_alpha_b else 'not rejected'} at α = {alpha_b:.2f}.
         """)
 
-# --- Tab 8: Tukey HSD ---
+# --- Tab 8: Tukey HSD (No changes from previous version, assumed to be working) ---
 def tab_tukey_hsd():
     st.header("Tukey HSD (Honestly Significant Difference) Explorer")
     col1, col2 = st.columns([2, 1.5])
@@ -1511,7 +1512,7 @@ def tab_kruskal_wallis():
                 x_fill_upper_kw = np.linspace(crit_val_chi2_kw, plot_max_chi2_kw, 100)
                 ax_kw.fill_between(x_fill_upper_kw, stats.chi2.pdf(x_fill_upper_kw, df_kw), color='red', alpha=0.5, label=f'α = {alpha_kw:.4f}')
                 ax_kw.axvline(crit_val_chi2_kw, color='red', linestyle='--', lw=1, label=f'χ²_crit = {crit_val_chi2_kw_display_str}')
-            else:
+            else: # crit_val_chi2_kw is None or NaN
                  crit_val_chi2_kw_display_str = "N/A (calc error)"
 
 
@@ -1564,36 +1565,42 @@ def tab_kruskal_wallis():
 
         st.subheader("Summary")
         p_val_for_crit_val_kw_display = alpha_kw
-        p_val_calc_kw = float('nan') # Initialize
+        p_val_calc_kw_num = float('nan') 
         decision_crit_kw = False
         comparison_crit_str_kw = "df must be > 0 for a valid test"
         decision_p_alpha_kw = False
         apa_H_stat = f"*H*({df_kw if df_kw > 0 else 'N/A'}) = {test_stat_h_kw:.2f}"
         
         if df_kw > 0:
+            p_val_calc_kw_num = stats.chi2.sf(test_stat_h_kw, df_kw)
             if crit_val_chi2_kw is not None and isinstance(crit_val_chi2_kw, (int,float)) and not np.isnan(crit_val_chi2_kw) :
-                p_val_calc_kw = stats.chi2.sf(test_stat_h_kw, df_kw)
                 decision_crit_kw = test_stat_h_kw > crit_val_chi2_kw
                 comparison_crit_str_kw = f"H({test_stat_h_kw:.3f}) > χ²_crit({crit_val_chi2_kw:.3f})" if decision_crit_kw else f"H({test_stat_h_kw:.3f}) ≤ χ²_crit({crit_val_chi2_kw:.3f})"
-                if not np.isnan(p_val_calc_kw):
-                    decision_p_alpha_kw = p_val_calc_kw < alpha_kw
-                else: # p_val_calc_kw is NaN
-                    comparison_crit_str_kw = "Comparison not possible (p-value is NaN)"
-                    decision_p_alpha_kw = False # Cannot make decision
-            else: # crit_val_chi2_kw is None or NaN
+            else: 
                 comparison_crit_str_kw = "Comparison not possible (critical value is N/A or NaN)"
-                decision_p_alpha_kw = False
-        else: # df_kw <= 0
+            
+            if not np.isnan(p_val_calc_kw_num):
+                decision_p_alpha_kw = p_val_calc_kw_num < alpha_kw
+            else: 
+                decision_p_alpha_kw = False 
+        else: 
              apa_H_stat = f"*H* = {test_stat_h_kw:.2f} (df={df_kw}, test invalid)"
         
-        p_val_calc_kw_formatted_str = f"{p_val_calc_kw:.4f}" if not np.isnan(p_val_calc_kw) else "N/A"
-        apa_p_val_calc_kw_str = apa_p_value(p_val_calc_kw)
+        p_val_calc_kw_num_str = "N/A"
+        if not np.isnan(p_val_calc_kw_num):
+            try:
+                p_val_calc_kw_num_str = f"{p_val_calc_kw_num:.4f}"
+            except (ValueError, TypeError):
+                p_val_calc_kw_num_str = "N/A (format err)"
+        
+        apa_p_val_calc_kw_str = apa_p_value(p_val_calc_kw_num)
+
 
         st.markdown(f"""
         1.  **Critical χ²-value (df={df_kw})**: {crit_val_chi2_kw_display_str}
             * *Associated p-value (α)*: {p_val_for_crit_val_kw_display:.4f}
         2.  **Calculated H-statistic**: {test_stat_h_kw:.3f}
-            * *Calculated p-value (from χ² approx.)*: {p_val_calc_kw_formatted_str} ({apa_p_val_calc_kw_str})
+            * *Calculated p-value (from χ² approx.)*: {p_val_calc_kw_num_str} ({apa_p_val_calc_kw_str})
         3.  **Decision (Critical Value Method)**: H₀ is **{'rejected' if decision_crit_kw else 'not rejected'}**.
             * *Reason*: {comparison_crit_str_kw}.
         4.  **Decision (p-value Method)**: H₀ is **{'rejected' if decision_p_alpha_kw else 'not rejected'}**.
@@ -1695,36 +1702,41 @@ def tab_friedman_test():
 
         st.subheader("Summary")
         p_val_for_crit_val_fr_display = alpha_fr
-        p_val_calc_fr = float('nan') # Initialize
+        p_val_calc_fr_num = float('nan') 
         decision_crit_fr = False
         comparison_crit_str_fr = "df must be > 0 for a valid test"
         decision_p_alpha_fr = False
         apa_Q_stat = f"χ²<sub>r</sub>({df_fr if df_fr > 0 else 'N/A'}) = {test_stat_q_fr:.2f}"
         
         if df_fr > 0:
+            p_val_calc_fr_num = stats.chi2.sf(test_stat_q_fr, df_fr)
             if crit_val_chi2_fr is not None and isinstance(crit_val_chi2_fr, (int,float)) and not np.isnan(crit_val_chi2_fr):
-                p_val_calc_fr = stats.chi2.sf(test_stat_q_fr, df_fr)
                 decision_crit_fr = test_stat_q_fr > crit_val_chi2_fr
                 comparison_crit_str_fr = f"Q({test_stat_q_fr:.3f}) > χ²_crit({crit_val_chi2_fr:.3f})" if decision_crit_fr else f"Q({test_stat_q_fr:.3f}) ≤ χ²_crit({crit_val_chi2_fr:.3f})"
-                if not np.isnan(p_val_calc_fr):
-                    decision_p_alpha_fr = p_val_calc_fr < alpha_fr
-                else: # p_val_calc_fr is NaN
-                    comparison_crit_str_fr = "Comparison not possible (p-value is NaN)"
-                    decision_p_alpha_fr = False 
-            else: # crit_val_chi2_fr is None or NaN
+            else: 
                 comparison_crit_str_fr = "Comparison not possible (critical value is N/A or NaN)"
+
+            if not np.isnan(p_val_calc_fr_num):
+                decision_p_alpha_fr = p_val_calc_fr_num < alpha_fr
+            else: 
                 decision_p_alpha_fr = False
         elif df_fr <=0 :
              apa_Q_stat = f"χ²<sub>r</sub> = {test_stat_q_fr:.2f} (df={df_fr}, test invalid)"
 
-        p_val_calc_fr_formatted_str = f"{p_val_calc_fr:.4f}" if not np.isnan(p_val_calc_fr) else "N/A"
-        apa_p_val_calc_fr_str = apa_p_value(p_val_calc_fr)
+        p_val_calc_fr_num_str = "N/A"
+        if not np.isnan(p_val_calc_fr_num):
+            try:
+                p_val_calc_fr_num_str = f"{p_val_calc_fr_num:.4f}"
+            except (ValueError, TypeError):
+                p_val_calc_fr_num_str = "N/A (format err)"
+        
+        apa_p_val_calc_fr_str = apa_p_value(p_val_calc_fr_num)
 
         st.markdown(f"""
         1.  **Critical χ²-value (df={df_fr})**: {crit_val_chi2_fr_display_str}
             * *Associated p-value (α)*: {p_val_for_crit_val_fr_display:.4f}
         2.  **Calculated Q-statistic (χ²_r)**: {test_stat_q_fr:.3f}
-            * *Calculated p-value (from χ² approx.)*: {p_val_calc_fr_formatted_str} ({apa_p_val_calc_fr_str})
+            * *Calculated p-value (from χ² approx.)*: {p_val_calc_fr_num_str} ({apa_p_val_calc_fr_str})
         3.  **Decision (Critical Value Method)**: H₀ is **{'rejected' if decision_crit_fr else 'not rejected'}**.
             * *Reason*: {comparison_crit_str_fr}.
         4.  **Decision (p-value Method)**: H₀ is **{'rejected' if decision_p_alpha_fr else 'not rejected'}**.
