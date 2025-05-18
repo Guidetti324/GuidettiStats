@@ -484,7 +484,7 @@ def tab_z():
 
 
 ###############################################################################
-#                       TAB 3: F‑Distribution (unchanged)
+#                       TAB 3: F‑Distribution 
 ###############################################################################
 
 def plot_f(f_calc, df1, df2, alpha):
@@ -604,7 +604,7 @@ def tab_f():
 
 
 ###############################################################################
-#                       TAB 4: Chi-Square (unchanged)
+#                       TAB 4: Chi-Square
 ###############################################################################
 
 def plot_chi(chi_calc, df, alpha):
@@ -724,7 +724,7 @@ def tab_chi():
 
 
 ###############################################################################
-#                       TAB 5: Mann‑Whitney U (updated)
+#                       TAB 5: Mann‑Whitney U 
 ###############################################################################
 
 def plot_u(u_calc, n1, n2, alpha, tail):
@@ -766,8 +766,8 @@ def plot_u(u_calc, n1, n2, alpha, tail):
         # If U_calc is small (less than mean), we test against U_crit_lower
         # If U_calc is large (greater than mean), we test against U_crit_higher
         
-        u_crit_lower = μ + z_crit_one_tail * σ # This will be mu - |z|sigma
-        u_crit_higher = μ - z_crit_one_tail * σ # This will be mu + |z|sigma
+        u_crit_lower = μ + z_crit_one_tail * σ if σ > 0 else μ # This will be mu - |z|sigma
+        u_crit_higher = μ - z_crit_one_tail * σ if σ > 0 else μ # This will be mu + |z|sigma
         
         # Decide which tail based on U_calc relative to μ
         if u_calc <= μ: # Test for significantly small U
@@ -786,8 +786,8 @@ def plot_u(u_calc, n1, n2, alpha, tail):
                         f"Ucrit={crit_val_effective:.2f}", color="green")
     else: # two-tailed
         z_crit_two_tail = stats.norm.ppf(alpha/2) # for lower tail z-score
-        crit_val_lower = μ + z_crit_two_tail * σ  # e.g. mu + (-1.96)*sigma
-        crit_val_higher = μ - z_crit_two_tail * σ # e.g. mu - (-1.96)*sigma = mu + 1.96*sigma
+        crit_val_lower = μ + z_crit_two_tail * σ if σ > 0 else μ  # e.g. mu + (-1.96)*sigma
+        crit_val_higher = μ - z_crit_two_tail * σ if σ > 0 else μ # e.g. mu - (-1.96)*sigma = mu + 1.96*sigma
         
         ax.fill_between(xs[xs<=crit_val_lower], ys[xs<=crit_val_lower], color="red", alpha=0.3)
         ax.fill_between(xs[xs>=crit_val_higher], ys[xs>=crit_val_higher], color="red", alpha=0.3,
@@ -817,7 +817,7 @@ def u_crit_exact(n1:int, n2:int, alpha:float, tail:str)->int: # This seems to be
     """Calculates critical U value using normal approximation, consistent with plot"""
     μ = n1*n2/2
     σ = np.sqrt(n1*n2*(n1+n2+1)/12)
-    if σ == 0: return μ # Avoid issues if std dev is zero (e.g. very small N)
+    if σ == 0: return int(round(μ)) # Avoid issues if std dev is zero (e.g. very small N)
 
     if tail.startswith("one"):
         z_crit = stats.norm.ppf(alpha) # Gives negative z for typical alpha < 0.5
@@ -924,26 +924,32 @@ def u_apa(u_val: int, n1: int, n2: int, alpha: float, tail: str):
     p_calc = np.clip(p_calc, 0, 1) # Ensure p-value is between 0 and 1
 
     # Determine critical values for U using normal approximation
+    u_crit_lower_one_tail = 0 # initialize
+    u_crit_higher_one_tail = 0 # initialize
+    u_crit_lower_two_tail = 0 # initialize
+    u_crit_higher_two_tail = 0 # initialize
+
     if tail.startswith("one"):
-        z_crit_one_tail = stats.norm.ppf(alpha) # Negative for left tail
-        # U_crit_lower for H1: group1 < group2 (small U values are evidence)
-        # U_crit_higher for H1: group1 > group2 (large U values are evidence)
-        u_crit_lower = μ + z_crit_one_tail * σ if σ > 0 else μ
-        u_crit_higher = μ - z_crit_one_tail * σ if σ > 0 else μ # (mu + |z_crit|*sigma)
+        z_crit_one_tail_lookup = stats.norm.ppf(alpha) # Negative for left tail
+        
+        u_crit_lower_one_tail = μ + z_crit_one_tail_lookup * σ if σ > 0 else μ # for U_calc <= expected
+        u_crit_higher_one_tail = μ - z_crit_one_tail_lookup * σ if σ > 0 else μ # for U_calc > expected (mu + |z|*sigma)
+
 
         if u_val <= μ: # Expecting small U
-            crit_report = u_crit_lower
-            reject = u_val <= crit_report 
+            crit_report_val = u_crit_lower_one_tail
+            reject = u_val <= crit_report_val 
         else: # Expecting large U
-            crit_report = u_crit_higher
-            reject = u_val >= crit_report
+            crit_report_val = u_crit_higher_one_tail
+            reject = u_val >= crit_report_val
+        crit_report_str = f"{crit_report_val:.0f}"
         
     else: # two-tailed
-        z_crit_two_tail = stats.norm.ppf(alpha/2) # Negative Z for lower tail cut-off
-        u_crit_lower = μ + z_crit_two_tail * σ if σ > 0 else μ
-        u_crit_higher = μ - z_crit_two_tail * σ if σ > 0 else μ
-        crit_report = f"{u_crit_lower:.0f} or {u_crit_higher:.0f}" # Report both for two-tailed
-        reject = (u_val <= u_crit_lower) or (u_val >= u_crit_higher)
+        z_crit_two_tail_lookup = stats.norm.ppf(alpha/2) # Negative Z for lower tail cut-off
+        u_crit_lower_two_tail = μ + z_crit_two_tail_lookup * σ if σ > 0 else μ
+        u_crit_higher_two_tail = μ - z_crit_two_tail_lookup * σ if σ > 0 else μ
+        crit_report_str = f"U ≤ {u_crit_lower_two_tail:.0f} or U ≥ {u_crit_higher_two_tail:.0f}" 
+        reject = (u_val <= u_crit_lower_two_tail) or (u_val >= u_crit_higher_two_tail)
 
     decision = "rejected" if reject else "failed to reject"
     if reject:
@@ -977,10 +983,21 @@ def u_apa(u_val: int, n1: int, n2: int, alpha: float, tail: str):
         )
     st.write(expl)
 
+    # APA Report section
+    apa_crit_region_desc = ""
+    if tail.startswith("one"):
+        if u_val <= μ:
+            apa_crit_region_desc = f"U ≤ {u_crit_lower_one_tail:.0f}"
+        else:
+            apa_crit_region_desc = f"U ≥ {u_crit_higher_one_tail:.0f}"
+    else: #two-tailed
+        apa_crit_region_desc = f"U ≤ {u_crit_lower_two_tail:.0f} or U ≥ {u_crit_higher_two_tail:.0f}"
+
+
     st.markdown(
         "**APA interpretation** \n"
         f"Calculated statistic: *U*={u_val}, *z*<sub>approx</sub>={z_calc_for_p:.2f}, *p*={p_calc:.3f}.  \n"
-        f"Critical U region based on α={alpha:.3f}: For one-tailed (lower): U ≤ {u_crit_lower:.0f}; For one-tailed (upper): U ≥ {u_crit_higher:.0f}; For two-tailed: U ≤ {u_crit_lower:.0f} or U ≥ {u_crit_higher:.0f}. \n"
+        f"Critical U region (approx.) for α={alpha:.3f} ({tail}): {apa_crit_region_desc}. \n"
         f"Statistic comparison → H0 **{decision}** ({reason_stats}).  \n"
         f"*p* comparison → H0 **{decision}** ({reason_p}).  \n"
         f"**APA 7 report:** *U*={u_val}, *p*={p_calc:.3f} "
@@ -1001,8 +1018,8 @@ def tab_u():
                                 min_value=0.0001, max_value=0.5, key="u_alpha", format="%.4f")
         tail = st.radio("Tail", ["one‑tailed", "two‑tailed"], key="u_tail")
     
-    if n1 < 2 or n2 < 2: # Normal approx less reliable for very small N
-        st.warning("Normal approximation for Mann-Whitney U is less reliable for n < 2. Table values might be less accurate.")
+    if n1 < 1 or n2 < 1: # Corrected condition, was n1 < 2 or n2 < 2
+        st.warning("Normal approximation for Mann-Whitney U is generally recommended for n1, n2 ≥ 5-10. Results for very small N might be less accurate.")
 
 
     if st.button("Update Plot", key="u_plot"):
@@ -1029,7 +1046,7 @@ def tab_u():
 
 
 ###############################################################################
-#               TAB 6: Wilcoxon Signed‑Rank T (unchanged note/p)
+#               TAB 6: Wilcoxon Signed‑Rank T 
 ###############################################################################
 
 def w_crit_exact(n: int, alpha: float, tail: str)->int: # Using normal approximation for critical T
@@ -1055,11 +1072,14 @@ def plot_w(t_calc, n, alpha, tail):
 
     fig, ax = plt.subplots(figsize=(12,4), dpi=100)
     
-    plot_min = min(μ - 4*σ, t_calc - σ if σ > 0 else t_calc -1)
-    plot_max = max(μ + 4*σ, t_calc + σ if σ > 0 else t_calc +1)
+    plot_min = min(μ - 4*σ, t_calc - σ if σ > 0 else t_calc -1, 0) # Ensure plot starts at 0 or less
+    plot_max = max(μ + 4*σ, t_calc + σ if σ > 0 else t_calc +1, n*(n+1)/2) # Ensure plot includes max T
     if plot_min >= plot_max:
-        plot_min = t_calc - 2
+        plot_min = max(0, t_calc - 2)
         plot_max = t_calc + 2
+    if n*(n+1)/2 < plot_max : plot_max = n*(n+1)/2 # T cannot exceed n(n+1)/2
+    if plot_min < 0 : plot_min = 0 # T cannot be less than 0
+
 
     xs = np.linspace(plot_min, plot_max, 400)
     ys = stats.norm.pdf(xs, μ, σ)
@@ -1071,14 +1091,9 @@ def plot_w(t_calc, n, alpha, tail):
 
     if tail.startswith("one"):
         # For Wilcoxon T, smaller T values are significant (reject H0 if T_calc <= T_crit)
-        # H1: median difference is < 0 (or >0, depending on how differences are calculated)
         # The plot should show the critical region in the lower tail by default for T
-        t_crit_lower_one_tail = w_crit_exact(n, alpha, "one‑tailed") # Gets T_alpha
+        crit_val_effective = w_crit_exact(n, alpha, "one‑tailed") # Gets T_alpha (lower tail)
         
-        # The direction depends on how T is calculated (sum of positive or negative ranks)
-        # Assuming T_calc is the smaller of T+ and T- (conventional for critical tables)
-        # Then rejection is always T_calc <= T_crit
-        crit_val_effective = t_crit_lower_one_tail
         ax.fill_between(xs[xs<=crit_val_effective], ys[xs<=crit_val_effective], color="red", alpha=0.3,
                         label="Reject H0")
         ax.axvline(crit_val_effective, color="green", ls="--")
@@ -1086,29 +1101,28 @@ def plot_w(t_calc, n, alpha, tail):
                         f"Tcrit={crit_val_effective}", color="green")
 
     else: # two-tailed
-        # For two-tailed, T_calc <= T_crit(alpha/2)
-        t_crit_lower_two_tail = w_crit_exact(n, alpha, "two‑tailed") # This internally uses alpha/2
-        # The upper critical value is not simply mu + |z|sigma for T, as T is sum of ranks.
-        # Max T is n(n+1)/2. If T_calc is compared to T_crit_lower.
-        # Rejection region is T_calc <= T_crit_lower (alpha/2).
-        # Some sources might also define an upper critical T_crit_higher for two-tailed.
-        # For simplicity with normal approx of T, usually just T_calc vs T_crit(alpha/2) lower.
-        # However, the original code had distinct lower and upper fills.
-        # Let's use T_crit(alpha/2) for the lower boundary.
-        # Upper boundary would be T_max - T_crit(alpha/2)
+        # For two-tailed, T_calc <= T_crit(alpha/2) for lower tail.
+        # Upper critical value T_crit_higher = n(n+1)/2 - T_crit_lower(alpha/2)
         
-        crit_val_lower = t_crit_lower_two_tail
-        crit_val_higher = n*(n+1)/2 - crit_val_lower # Symmetrical based on total sum of ranks
+        crit_val_lower = w_crit_exact(n, alpha, "two‑tailed") # This uses alpha/2 internally for lower T_crit
+        crit_val_higher = n*(n+1)/2 - crit_val_lower 
 
         ax.fill_between(xs[xs<=crit_val_lower], ys[xs<=crit_val_lower], color="red", alpha=0.3)
-        ax.fill_between(xs[xs>=crit_val_higher], ys[xs>=crit_val_higher], color="red", alpha=0.3,
+        # Ensure higher crit is actually higher than lower before plotting
+        if crit_val_higher > crit_val_lower :
+             ax.fill_between(xs[xs>=crit_val_higher], ys[xs>=crit_val_higher], color="red", alpha=0.3,
                         label="Reject H0")
+        else: # If they are the same or cross, only show lower label to avoid clutter
+             ax.fill_between(xs[xs<=crit_val_lower], ys[xs<=crit_val_lower], color="red", alpha=0.3, label="Reject H0")
+
+
         ax.axvline(crit_val_lower, color="green", ls="--")
-        ax.axvline(crit_val_higher, color="green", ls="--")
         place_label(ax, placed, crit_val_lower, stats.norm.pdf(crit_val_lower, μ, σ)+0.002,
                     f"Tcrit_L={crit_val_lower}", color="green")
-        place_label(ax, placed, crit_val_higher, stats.norm.pdf(crit_val_higher, μ, σ)+0.002,
-                    f"Tcrit_U={crit_val_higher}", color="green")
+        if crit_val_higher > crit_val_lower:
+            ax.axvline(crit_val_higher, color="green", ls="--")
+            place_label(ax, placed, crit_val_higher, stats.norm.pdf(crit_val_higher, μ, σ)+0.002,
+                        f"Tcrit_U={crit_val_higher}", color="green")
 
 
     ax.axvline(t_calc, color="blue", ls="--")
@@ -1129,17 +1143,13 @@ def build_w_html(n:int, user_input_alpha:float, tail:str)->str: # user_input_alp
     """
     Table cell values are for fixed alpha levels. Highlighting attempts to match user_input_alpha.
     """
-    rows = list(range(max(5,n-5), n+6))
+    rows = list(range(max(5,n-5), n+6)) # Wilcoxon tables usually start N around 5-8
     # These are the fixed alpha levels for which the table columns are generated
     # These alphas are typically used for one-tailed tests in Wilcoxon tables.
-    # For two-tailed, the table is often entered with alpha/2.
-    # Our w_crit_exact function takes the tail argument, so it handles this.
     fixed_alphas_for_columns = [0.005, 0.01, 0.025, 0.05] # Common Wilcoxon table alphas (one-tailed)
-    # Adjusting headers if user provides two-tailed values to match common tables:
-    # Example: if user alpha = 0.05 two-tailed, they might look for 0.025 column.
-
+    
     col_idx_to_highlight = None
-    # Highlighting logic needs to be clear. If user enters alpha=0.05 two-tailed,
+    # Highlighting logic: If user enters alpha=0.05 two-tailed,
     # this means 0.025 in each tail. So we should look for a 0.025 column.
     # If user enters alpha=0.05 one-tailed, we look for a 0.05 column.
     alpha_to_find_in_cols = user_input_alpha
@@ -1158,7 +1168,6 @@ def build_w_html(n:int, user_input_alpha:float, tail:str)->str: # user_input_alp
         row_html = f'<td id="w_{r_n_val}_0">{r_n_val}</td>'
         for i_col_idx, a_col_one_tailed in enumerate(fixed_alphas_for_columns, start=1):
             # Calculate critical T for this column's one-tailed alpha
-            # The w_crit_exact will give the one-tailed critical value for a_col_one_tailed
             val = w_crit_exact(r_n_val, a_col_one_tailed, "one‑tailed") 
             row_html += f'<td id="w_{r_n_val}_{i_col_idx}">{val}</td>'
         body += f"<tr>{row_html}</tr>"
@@ -1189,42 +1198,37 @@ def w_apa(t_val: int, n: int, alpha: float, tail: str):
     μ = n*(n+1)/4
     σ = np.sqrt(n*(n+1)*(2*n+1)/24)
 
+    z_calc_for_p = 0 # Initialize
     if σ == 0:
-        p_calc = 1.0 if t_val != μ else 0.0
-        z_calc_for_p = 0
+        p_calc = 1.0 if t_val != μ else 0.0 # Simplified p-value if no variance
         st.warning("Standard deviation is zero for Wilcoxon T; p-value may be unreliable.")
     else:
         # Apply continuity correction for normal approximation of discrete distribution
         # If T_calc < mu, use T_calc + 0.5. If T_calc > mu, use T_calc - 0.5
-        # For p-value, we want area in tail.
-        # If testing T_calc <= T_crit (small T is significant)
-        if t_val + 0.5 < μ: # if t_val is clearly less than mean
+        # This is for calculating Z from T.
+        if t_val < μ: 
              z_calc_for_p = (t_val + 0.5 - μ) / σ
-        elif t_val - 0.5 > μ: # if t_val is clearly more than mean
+        elif t_val > μ: 
              z_calc_for_p = (t_val - 0.5 - μ) / σ
-        else: # t_val is close to mean, correction might cross mean
-             z_calc_for_p = (t_val - μ) / σ # No correction if ambiguous or exactly mean
+        else: # t_val is exactly mu
+             z_calc_for_p = (t_val - μ) / σ # No correction needed or ambiguous
     
     # Calculate p-value based on z_calc_for_p
-    # Wilcoxon T is typically one-sided (T <= T_crit) or two-sided (T <= T_crit_alpha/2)
-    # p_calc from normal approx of T (sum of ranks)
-    # If T is small, p = P(sum_ranks <= T_calc)
-    
-    # P-value calculation using z_calc_for_p (which has continuity correction)
-    # The p-value corresponds to how extreme T_calc is.
-    # If T_calc represents the smaller sum of ranks, then smaller T_calc is more extreme.
-    # P(T <= t_val) using normal approx.
-    p_one_sided_from_z = stats.norm.cdf(z_calc_for_p) # Prob of getting a Z as small or smaller
+    # P-value for T (sum of ranks). Smaller T_calc is more extreme (if T_calc is the smaller sum).
+    # p_one_sided_from_z is P(observing a T as or more extreme in one direction)
+    p_one_sided_from_z = stats.norm.cdf(z_calc_for_p) # If z_calc is negative (T < mu), this is small.
+                                                     # If z_calc is positive (T > mu), this is large.
+                                                     # We need to adjust based on direction of "extremeness" for T.
+                                                     # T is usually the *smaller* of T+ and T-. So smaller T is more extreme.
+                                                     # So, if z_calc_for_p corresponds to this smaller T, then p_one_sided_from_z is correct for "less than".
 
     if tail.startswith("one"):
-        # Test is often directional, e.g. H1: median diff < 0 leads to small T.
-        # So p-value is P(T <= T_calc)
+        # Assuming T_val is the statistic that should be small to reject H0.
         p_calc = p_one_sided_from_z 
     else: # two-tailed
-        # Need to consider if T_calc could be from upper tail equivalent.
-        # Usually T_calc is the smaller of T+ and T-.
-        # So, p = 2 * P(T <= T_calc) if using normal approx symmetrically
-        p_calc = 2 * min(p_one_sided_from_z, 1 - p_one_sided_from_z) # Symmetrical two-tailed p
+        # p = 2 * P(T <= T_calc) if T_calc is from lower half, or 2 * P(T >= T_calc) if T_calc from upper half
+        # Using absolute z value for two-tailed test:
+        p_calc = 2 * stats.norm.sf(abs(z_calc_for_p)) # 2 * (1 - cdf(abs(z)))
 
     p_calc = np.clip(p_calc, 0, 1)
 
@@ -1245,12 +1249,11 @@ def w_apa(t_val: int, n: int, alpha: float, tail: str):
     # Explanation
     expl = (
         f"Normal approx. for T (with continuity correction): z ≈ {z_calc_for_p:.2f}.\n"
-        f"Using this z, the one-sided p-value P(T ≤ {t_val}) is approx. {p_one_sided_from_z:.4f}.\n"
     )
     if tail.startswith("one"):
-        expl += f"For a **one‑tailed** test, p ≈ {p_calc:.4f}."
+        expl += f"For a **one‑tailed** test (assuming T<sub>calc</sub> represents the critical direction), p ≈ {p_calc:.4f}."
     else:
-        expl += f"For a **two‑tailed** test, p ≈ 2 × min({p_one_sided_from_z:.4f}, {1-p_one_sided_from_z:.4f}) = {p_calc:.4f}."
+        expl += f"For a **two‑tailed** test, p ≈ {p_calc:.4f}."
     st.write(expl)
 
     st.markdown(
@@ -1269,15 +1272,15 @@ def tab_w():
 
     c1, c2 = st.columns(2)
     with c1:
-        t_val = st.number_input("T statistic (smaller of T+, T-)", value=15, step=1, key="w_val")
+        t_val = st.number_input("T statistic (smaller of T+, T-)", value=15, step=1, min_value=0, key="w_val")
         n = st.number_input("N (non-zero diffs)", min_value=1, value=12, step=1, key="w_n")
     with c2:
         alpha = st.number_input("α", value=0.05, step=0.01,
                                 min_value=0.0001, max_value=0.5, key="w_alpha", format="%.4f")
         tail = st.radio("Tail", ["one‑tailed", "two‑tailed"], key="w_tail")
     
-    if n < 5 : # Normal approx less reliable for N < 5 or so
-        st.warning("Normal approximation for Wilcoxon T is less reliable for N < 5.")
+    if n < 5 : 
+        st.warning("Normal approximation for Wilcoxon T is less reliable for N < 5. Exact tables are preferred for small N.")
 
 
     if st.button("Update Plot", key="w_plot"):
@@ -1311,114 +1314,115 @@ def tab_w():
 #                           TAB 7: Binomial
 ###############################################################################
 
-def critical_binom(n: int, p_null: float, alpha: float, tail: str): # p renamed to p_null
+def critical_binom(n: int, p_null: float, alpha: float, tail: str): 
     """
     Calculates critical k values for binomial test.
-    For one-tailed, returns (k_crit, None) or (None, k_crit).
-    For two-tailed, returns (k_lo, k_hi).
+    For one-tailed, returns (k_crit_lower, k_crit_upper) where one will be relevant.
+    For two-tailed, returns (k_lo, k_hi) for the two tails.
     """
-    k_lo, k_hi = None, None
+    k_crit_lower, k_crit_upper = None, None # For one-tailed results
+    k_lo_two_tail, k_hi_two_tail = None, None # For two-tailed results
 
     if tail.startswith("one"):
-        # Determine direction based on a hypothetical observed k vs expected n*p_null
-        # This is tricky without k_observed. Let's assume:
-        # Default to finding k_crit for lower tail (P(X <= k_crit) <= alpha)
-        # and k_crit for upper tail (P(X >= k_crit) <= alpha)
-        # The APA function will then use the appropriate one.
+        # Lower tail critical value: largest k such that P(X <= k) <= alpha
+        cumulative_p = 0.0
+        for k_val in range(n + 1):
+            cumulative_p += stats.binom.pmf(k_val, n, p_null)
+            if cumulative_p > alpha:
+                k_crit_lower = k_val -1 
+                break
+        if k_crit_lower is None and cumulative_p <= alpha: # All values of k satisfy
+             k_crit_lower = n
+        if k_crit_lower < 0: k_crit_lower = 0
+
+
+        # Upper tail critical value: smallest k such that P(X >= k) <= alpha
+        # This is P(X < k) >= 1 - alpha
+        cumulative_p_sf = 0.0 # Summing from the right (sf style)
+        for k_val in range(n, -1, -1): # n down to 0
+            cumulative_p_sf += stats.binom.pmf(k_val, n, p_null)
+            if cumulative_p_sf > alpha:
+                k_crit_upper = k_val + 1
+                break
+        if k_crit_upper is None and cumulative_p_sf <= alpha: # All values satisfy (going from right)
+            k_crit_upper = 0
+        if k_crit_upper > n : k_crit_upper = n
         
-        # Lower tail: find largest k_lo such that P(X <= k_lo) <= alpha
-        current_sum_p_lower = 0.0
-        for k_val_lower in range(n + 1):
-            current_sum_p_lower += stats.binom.pmf(k_val_lower, n, p_null)
-            if current_sum_p_lower > alpha:
-                k_lo = k_val_lower -1 # The previous k was the last one to satisfy
-                if k_lo < 0 : k_lo = 0 # if first k already exceeds alpha
-                break
-        if k_lo is None and current_sum_p_lower <= alpha : k_lo = n # All k satisfy
-
-        # Upper tail: find smallest k_hi such that P(X >= k_hi) <= alpha
-        # which is P(X < k_hi) >= 1 - alpha
-        current_sum_p_upper = 0.0
-        for k_val_upper in range(n, -1, -1): # from n down to 0
-            current_sum_p_upper += stats.binom.pmf(k_val_upper, n, p_null)
-            if current_sum_p_upper > alpha:
-                k_hi = k_val_upper + 1 # The previous k (next one down) was the last to satisfy
-                if k_hi > n : k_hi = n
-                break
-        if k_hi is None and current_sum_p_upper <= alpha : k_hi = 0 # All k (going down) satisfy
-
-        return (k_lo if k_lo is not None else 0, k_hi if k_hi is not None else n) # return tuple of (lower, upper) one-tailed crits
+        return (k_crit_lower, k_crit_upper)
 
     else: # two-tailed
-        # Lower tail for two-tailed (alpha/2)
         target_alpha_half = alpha / 2
-        current_sum_p_lower = 0.0
-        for k_val_lower in range(n + 1):
-            current_sum_p_lower += stats.binom.pmf(k_val_lower, n, p_null)
-            if current_sum_p_lower > target_alpha_half:
-                k_lo = k_val_lower -1
-                if k_lo < 0: k_lo = 0
+        # Lower tail for two-tailed (alpha/2)
+        cumulative_p = 0.0
+        for k_val in range(n + 1):
+            cumulative_p += stats.binom.pmf(k_val, n, p_null)
+            if cumulative_p > target_alpha_half:
+                k_lo_two_tail = k_val -1
                 break
-        if k_lo is None and current_sum_p_lower <= target_alpha_half : k_lo = n
+        if k_lo_two_tail is None and cumulative_p <= target_alpha_half : k_lo_two_tail = n
+        if k_lo_two_tail < 0: k_lo_two_tail = 0
 
 
         # Upper tail for two-tailed (alpha/2)
-        current_sum_p_upper = 0.0
-        for k_val_upper in range(n, -1, -1):
-            current_sum_p_upper += stats.binom.pmf(k_val_upper, n, p_null)
-            if current_sum_p_upper > target_alpha_half:
-                k_hi = k_val_upper + 1
-                if k_hi > n: k_hi = n
+        cumulative_p_sf = 0.0
+        for k_val in range(n, -1, -1):
+            cumulative_p_sf += stats.binom.pmf(k_val, n, p_null)
+            if cumulative_p_sf > target_alpha_half:
+                k_hi_two_tail = k_val + 1
                 break
-        if k_hi is None and current_sum_p_upper <= target_alpha_half: k_hi = 0
+        if k_hi_two_tail is None and cumulative_p_sf <= target_alpha_half: k_hi_two_tail = 0
+        if k_hi_two_tail > n : k_hi_two_tail = n
         
-        return (k_lo if k_lo is not None else 0, k_hi if k_hi is not None else n)
+        return (k_lo_two_tail, k_hi_two_tail)
 
 
-def plot_binom(k_obs, n, p_null, alpha, tail): # k renamed to k_obs, p to p_null, added alpha, tail
+def plot_binom(k_obs, n, p_null, alpha, tail): 
     xs = np.arange(n+1)
     ys = stats.binom.pmf(xs, n, p_null)
     fig, ax = plt.subplots(figsize=(12,4), dpi=100)
-    ax.bar(xs, ys, color="lightgrey", label=f"P(X=k) for π={p_null}")
+    ax.bar(xs, ys, color="lightgrey", label=f"P(X=k) for π₀={p_null:.2f}")
     
     # Highlight observed k
     if 0 <= k_obs <= n:
         ax.bar(k_obs, stats.binom.pmf(k_obs,n,p_null), color="blue", label=f"Observed k={k_obs}")
 
     # Add critical regions
-    k_crit_lower, k_crit_upper = critical_binom(n, p_null, alpha, tail)
+    k_crit_res_lower, k_crit_res_upper = critical_binom(n, p_null, alpha, tail)
 
     crit_label_done = False
     if tail.startswith("one"):
-        # For one-tailed, we need to know which direction from k_obs vs n*p_null
         expected_k = n * p_null
-        if k_obs <= expected_k: # Assume lower tail test
-            if k_crit_lower is not None:
-                ax.bar(xs[xs <= k_crit_lower], ys[xs <= k_crit_lower], color="red", alpha=0.6, label=f"Reject H₀ (k≤{k_crit_lower})" if not crit_label_done else "")
+        # If observed k suggests a lower tail test (k_obs <= expected_k)
+        if k_obs <= expected_k: 
+            if k_crit_res_lower is not None and k_crit_res_lower >=0 : # check if valid crit value
+                ax.bar(xs[xs <= k_crit_res_lower], ys[xs <= k_crit_res_lower], color="red", alpha=0.6, label=f"Reject H₀ (k≤{k_crit_res_lower})" if not crit_label_done else "")
                 crit_label_done = True
-        else: # Assume upper tail test
-            if k_crit_upper is not None:
-                ax.bar(xs[xs >= k_crit_upper], ys[xs >= k_crit_upper], color="red", alpha=0.6, label=f"Reject H₀ (k≥{k_crit_upper})" if not crit_label_done else "")
+        # If observed k suggests an upper tail test (k_obs > expected_k)
+        else: 
+            if k_crit_res_upper is not None and k_crit_res_upper <= n: # check if valid crit value
+                ax.bar(xs[xs >= k_crit_res_upper], ys[xs >= k_crit_res_upper], color="red", alpha=0.6, label=f"Reject H₀ (k≥{k_crit_res_upper})" if not crit_label_done else "")
                 crit_label_done = True
     else: # two-tailed
-        if k_crit_lower is not None:
-            ax.bar(xs[xs <= k_crit_lower], ys[xs <= k_crit_lower], color="red", alpha=0.6, label=f"Reject H₀ (k≤{k_crit_lower} or k≥{k_crit_upper})" if not crit_label_done else "")
+        # k_crit_res_lower is k_lo_two_tail, k_crit_res_upper is k_hi_two_tail
+        if k_crit_res_lower is not None and k_crit_res_lower >= 0:
+            ax.bar(xs[xs <= k_crit_res_lower], ys[xs <= k_crit_res_lower], color="red", alpha=0.6, label=f"Reject H₀ (k≤{k_crit_res_lower} or k≥{k_crit_res_upper})" if not crit_label_done else "")
             crit_label_done = True
-        if k_crit_upper is not None and k_crit_upper > k_crit_lower: # Avoid double plotting if regions overlap weirdly
-             ax.bar(xs[xs >= k_crit_upper], ys[xs >= k_crit_upper], color="red", alpha=0.6, label=f"Reject H₀ (k≤{k_crit_lower} or k≥{k_crit_upper})" if not crit_label_done else "")
+        if k_crit_res_upper is not None and k_crit_res_upper <=n and k_crit_res_upper > (k_crit_res_lower if k_crit_res_lower is not None else -1) : 
+             ax.bar(xs[xs >= k_crit_res_upper], ys[xs >= k_crit_res_upper], color="red", alpha=0.6, label="" if crit_label_done else f"Reject H₀ (k≤{k_crit_res_lower} or k≥{k_crit_res_upper})")
              crit_label_done = True
 
 
     ax.set_xlabel("k (Number of Successes)")
     ax.set_ylabel("P(X=k)")
     ax.legend()
-    ax.set_title(f"Binomial Distribution (n={n}, π₀={p_null}), α={alpha} ({tail})")
-    ax.set_xticks(xs) # Ensure all k values are tickable if n is small
+    ax.set_title(f"Binomial Distribution (n={n}, π₀={p_null:.2f}), α={alpha:.3f} ({tail})")
+    if n <= 30 : # Only show all k ticks if n is small enough
+        ax.set_xticks(xs) 
     fig.tight_layout()
     return fig
 
 
-def build_binom_html(k_obs: int, n: int, p_null: float) -> str: # k renamed to k_obs, p to p_null
+def build_binom_html(k_obs: int, n: int, p_null: float) -> str: 
     """
     Single-step highlight for binomial table near k_obs±5
     """
@@ -1450,43 +1454,43 @@ def build_binom_html(k_obs: int, n: int, p_null: float) -> str: # k renamed to k
     return html
 
 
-def binom_table(k_obs: int, n: int, p_null: float): # k renamed to k_obs, p to p_null
+def binom_table(k_obs: int, n: int, p_null: float): 
     code = build_binom_html(k_obs,n,p_null)
     st.markdown(container(code, height=360), unsafe_allow_html=True) # Adjusted height
 
 
-def binom_apa(k_obs: int, n: int, p_null: float, alpha: float, tail: str): # k renamed to k_obs, p to p_null
+def binom_apa(k_obs: int, n: int, p_null: float, alpha: float, tail: str): 
     """
     Show dynamic explanation and final APA lines for the binomial test.
     Uses exact p-value calculation.
+    CORRECTED: stats.binom_test to stats.binomtest
     """
     # Calculate exact p-value
+    p_calc = 0.0 # Initialize p_calc
     if tail.startswith("one"):
         expected_k = n * p_null
         if k_obs <= expected_k: # Lower tail (observed k is less than or equal to expected)
-            p_calc = stats.binom_test(k_obs, n, p_null, alternative='less')
-            # p_calc = stats.binom.cdf(k_obs, n, p_null) # Sum P(X<=k_obs)
+            # For scipy.stats.binomtest, 'alternative' refers to H1.
+            # If H1: p < p_null (lower tail), we use 'less'.
+            result = stats.binomtest(k_obs, n, p_null, alternative='less')
+            p_calc = result.pvalue
         else: # Upper tail (observed k is greater than expected)
-            p_calc = stats.binom_test(k_obs, n, p_null, alternative='greater')
-            # p_calc = stats.binom.sf(k_obs-1, n, p_null) # Sum P(X>=k_obs)
+            # If H1: p > p_null (upper tail), we use 'greater'.
+            result = stats.binomtest(k_obs, n, p_null, alternative='greater')
+            p_calc = result.pvalue
     else: # two-tailed
-        p_calc = stats.binom_test(k_obs, n, p_null, alternative='two-sided')
+        # If H1: p != p_null (two-sided).
+        result = stats.binomtest(k_obs, n, p_null, alternative='two-sided')
+        p_calc = result.pvalue
 
-    # Determine critical region
-    # For APA, we state if k_obs falls in rejection region based on p_calc vs alpha
+    # Determine critical region for description
     reject = p_calc < alpha 
     
-    # For descriptive critical values (k_lo, k_hi for two-tailed, or single k_crit for one-tailed)
     k_crit_lower_desc, k_crit_upper_desc = critical_binom(n, p_null, alpha, tail)
 
 
     decision = "rejected" if reject else "failed to reject"
-    if reject:
-        reason_stats = "because the observed k was in the rejection region (p < α)"
-        reason_p = "because p < α"
-    else:
-        reason_stats = "because the observed k was not in the rejection region (p ≥ α)"
-        reason_p = "because p ≥ α"
+    reason_p = "because p < α" if reject else "because p ≥ α"
 
     # Explanation text
     st.write(f"Observed k = {k_obs}, n = {n}, null proportion π₀ = {p_null:.2f}.")
@@ -1494,33 +1498,34 @@ def binom_apa(k_obs: int, n: int, p_null: float, alpha: float, tail: str): # k r
     cdf_at_k_obs = stats.binom.cdf(k_obs, n, p_null)
     sf_at_k_obs = stats.binom.sf(k_obs -1, n, p_null) if k_obs > 0 else 1.0
 
+    crit_region_desc_apa = ""
     if tail.startswith("one"):
         expected_k = n * p_null
         if k_obs <= expected_k:
             st.write(
                 f"For a **one‑tailed** test (e.g., H₁: π < π₀, observed k ≤ expected k), "
-                f"p = P(X ≤ {k_obs}) = {cdf_at_k_obs:.4f} (exact binomial test yields p={p_calc:.4f})."
+                f"the exact binomial test yields p={p_calc:.4f} (P(X ≤ {k_obs}) based on table is {cdf_at_k_obs:.4f})."
             )
-            crit_region_desc = f"k ≤ {k_crit_lower_desc}"
+            crit_region_desc_apa = f"k ≤ {k_crit_lower_desc}" if k_crit_lower_desc is not None else "N/A"
         else:
             st.write(
                 f"For a **one‑tailed** test (e.g., H₁: π > π₀, observed k > expected k), "
-                f"p = P(X ≥ {k_obs}) = {sf_at_k_obs:.4f} (exact binomial test yields p={p_calc:.4f})."
+                f"the exact binomial test yields p={p_calc:.4f} (P(X ≥ {k_obs}) based on table is {sf_at_k_obs:.4f})."
             )
-            crit_region_desc = f"k ≥ {k_crit_upper_desc}"
+            crit_region_desc_apa = f"k ≥ {k_crit_upper_desc}" if k_crit_upper_desc is not None else "N/A"
     else: # two-tailed
         st.write(
             f"For a **two‑tailed** test (H₁: π ≠ π₀), the exact binomial test sums probabilities in both tails "
             f"that are as or more extreme than observed k={k_obs}. This yields p={p_calc:.4f}."
         )
-        crit_region_desc = f"k ≤ {k_crit_lower_desc} or k ≥ {k_crit_upper_desc}"
+        crit_region_desc_apa = f"k ≤ {k_crit_lower_desc if k_crit_lower_desc is not None else 'N/A'} or k ≥ {k_crit_upper_desc if k_crit_upper_desc is not None else 'N/A'}"
 
 
     st.markdown(
         "**APA interpretation** \n"
         f"Observed successes: k={k_obs}, trials n={n}. Null proportion π₀={p_null:.2f}.  \n"
         f"Exact binomial test: *p*={p_calc:.3f} ({tail}).  \n"
-        f"Significance level α={alpha:.3f}. Critical region (approx.): {crit_region_desc}. \n"
+        f"Significance level α={alpha:.3f}. Critical region (approx. exact): {crit_region_desc_apa}. \n"
         f"Decision based on p-value → H₀ **{decision}** ({reason_p}).  \n"
         f"**APA 7 report:** An exact binomial test indicated that the observed number of successes (k={k_obs}, n={n}) "
         f"{'was significantly different from' if reject else 'was not significantly different from'} "
@@ -1536,9 +1541,9 @@ def tab_binom():
     with c1:
         n = st.number_input("n (trials)", min_value=1, value=20, step=1, key="b_n")
         p_null = st.number_input("π₀ (null proportion)", value=0.50,
-                            step=0.01, min_value=0.00, max_value=1.00, key="b_p_null", format="%.2f") # p_null
+                            step=0.01, min_value=0.00, max_value=1.00, key="b_p_null", format="%.2f") 
     with c2:
-        k_obs = st.number_input("k (observed successes)", min_value=0, value=10, step=1, key="b_k_obs") # k_obs
+        k_obs = st.number_input("k (observed successes)", min_value=0, value=10, step=1, key="b_k_obs") 
         alpha = st.number_input("α", value=0.05, step=0.01,
                                 min_value=0.0001, max_value=0.5, key="b_alpha", format="%.4f")
         tail = st.radio("Tail", ["one‑tailed", "two‑tailed"], key="b_tail")
@@ -1549,12 +1554,12 @@ def tab_binom():
 
 
     if st.button("Update Plot", key="b_plot"):
-        st.pyplot(plot_binom(k_obs,n,p_null, alpha, tail)) # Pass all args
+        st.pyplot(plot_binom(k_obs,n,p_null, alpha, tail)) 
 
     st.write("**Binomial table** (shows probabilities around observed k)")
     ctable, cexp = st.columns([2,1])
     with ctable:
-        binom_table(k_obs,n,p_null) # Pass k_obs, n, p_null
+        binom_table(k_obs,n,p_null) 
         st.info(
             "Note: This table shows P(X=k), cumulative P(X≤k), and P(X≥k) for values of k around your observed k. "
             "It helps understand the distribution at π₀. "
@@ -1562,7 +1567,7 @@ def tab_binom():
             )
     with cexp:
         st.subheader("P‑value Calculation Explanation")
-        binom_apa(k_obs,n,p_null,alpha,tail) # Pass all args
+        binom_apa(k_obs,n,p_null,alpha,tail) 
 
 
 ###############################################################################
@@ -1579,20 +1584,21 @@ def main():
     ])
 
     with tabs[0]:
-        tab_t()          # (new features)
+        tab_t()          
     with tabs[1]:
-        tab_z()          # (new features)
+        tab_z()          
     with tabs[2]:
-        tab_f()          # (no new note/p explanation needed)
+        tab_f()          
     with tabs[3]:
-        tab_chi()        # MODIFIED alpha input, table highlighting robustness
+        tab_chi()        
     with tabs[4]:
-        tab_u()          # (new features) - Note: Mann-Whitney U plot/APA now uses Normal Approx.
+        tab_u()          
     with tabs[5]:
-        tab_w()          # MODIFIED table highlighting, plot/APA uses Normal Approx.
+        tab_w()          
     with tabs[6]:
-        tab_binom()      # (new features) - Binomial plot/APA updated for clarity
+        tab_binom()      
 
 
 if __name__ == "__main__":
     main()
+
