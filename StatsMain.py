@@ -1,23 +1,7 @@
 ###############################################################################
 #  PSYC-250 – Statistical Tables Explorer
 #  ---------------------------------------------------------------------------
-#  Seven complete tabs:
-#       1) t-Distribution        4) Chi-Square
-#       2) z-Distribution        5) Mann-Whitney U
-#       3) F-Distribution        6) Wilcoxon Signed-Rank T
-#       7) Binomial
-#
-#  NEW FEATURES ADDED FOR (t, z, Mann-Whitney U, Wilcoxon T, Binomial):
-#   1) A "Cumulative Table Note" explaining how to interpret the table for
-#      one- vs. two-tailed tests.
-#   2) A "P-Value Calculation Explanation" section next to the table,
-#      showing how the table lookup leads to p, depending on one- vs. two-tailed.
-#   3) Automatic plot shading based on sign of the test statistic for one-tailed
-#      (negative → left tail, positive → right tail). For two-tailed, shade both tails.
-#
-#  F-Distribution and Chi-Square remain as before, since they are always one-tailed.
-#
-#  To run:   streamlit run app.py
+#  (Comments as per original)
 ###############################################################################
 
 import streamlit as st
@@ -44,7 +28,7 @@ def show_cumulative_note():
 def place_label(ax, placed_list, x, y, txt, *, color="blue"):
     dx = dy = 0.0
     for (xx, yy) in placed_list:
-        if abs(x - xx) < 0.15 and abs(y - yy) < 0.05: # Simple collision avoidance
+        if abs(x - xx) < 0.15 and abs(y - yy) < 0.05:
             dx += 0.06
             dy += 0.04
     ax.text(x + dx, y + dy, txt, color=color,
@@ -75,758 +59,500 @@ CSS_BASE = (
 #                             TAB 1: t-Distribution
 ###############################################################################
 
-def plot_t(t_calc, df, input_alpha, tail): # Use input_alpha for plot's critical value
+def plot_t(t_calc, df, input_alpha, tail):
     fig, ax = plt.subplots(figsize=(12, 4), dpi=100)
     if df <= 0:
         ax.text(0.5, 0.5, "Degrees of freedom (df) must be positive.", ha='center', va='center')
         return fig
         
     xs = np.linspace(-4.5, 4.5, 400)
-    try:
-        ys = stats.t.pdf(xs, df)
-    except Exception:
-        ax.text(0.5, 0.5, f"Invalid df ({df}) for t-distribution PDF.", ha='center', va='center')
-        return fig
+    try: ys = stats.t.pdf(xs, df)
+    except Exception: ax.text(0.5, 0.5, f"Invalid df ({df}) for t-PDF.", ha='center', va='center'); return fig
 
-    ax.plot(xs, ys, "k")
-    ax.fill_between(xs, ys, color="lightgrey", alpha=0.25, label="Fail to Reject H0")
+    ax.plot(xs, ys, "k"); ax.fill_between(xs, ys, color="lightgrey", alpha=0.25, label="Fail to Reject H0")
     placed_labels = []
-
-    # Critical value for the plot is based on the USER'S INPUT ALPHA
-    plot_crit_val = np.nan
+    plot_crit_val = np.nan # Initialize
     try:
         if tail.startswith("one"):
-            plot_crit_val_one_sided = stats.t.ppf(1 - input_alpha, df) # Positive critical value
-            if t_calc >= 0: # Right tail test assumption for positive t_calc
-                actual_plot_crit = plot_crit_val_one_sided
-                ax.fill_between(xs[xs >= actual_plot_crit], ys[xs >= actual_plot_crit], color="red", alpha=0.3, label="Reject H0")
-                ax.axvline(actual_plot_crit, color="green", ls="--")
-                pdf_val = stats.t.pdf(actual_plot_crit, df)
-                if not np.isnan(pdf_val): place_label(ax, placed_labels, actual_plot_crit, pdf_val + 0.02, f"tcrit={actual_plot_crit:.2f}", color="green")
-            else: # Left tail test assumption for negative t_calc
-                actual_plot_crit = -plot_crit_val_one_sided # Negative critical value
-                ax.fill_between(xs[xs <= actual_plot_crit], ys[xs <= actual_plot_crit], color="red", alpha=0.3, label="Reject H0")
-                ax.axvline(actual_plot_crit, color="green", ls="--")
-                pdf_val = stats.t.pdf(actual_plot_crit, df)
-                if not np.isnan(pdf_val): place_label(ax, placed_labels, actual_plot_crit, pdf_val + 0.02, f"tcrit={actual_plot_crit:.2f}", color="green")
+            plot_crit_val_one_sided = stats.t.ppf(1 - input_alpha, df)
+            if t_calc >= 0: actual_plot_crit = plot_crit_val_one_sided
+            else: actual_plot_crit = -plot_crit_val_one_sided
+            
+            if t_calc >=0 : region = xs[xs >= actual_plot_crit]
+            else: region = xs[xs <= actual_plot_crit]
+            ax.fill_between(region, ys[np.isin(xs,region)], color="red", alpha=0.3, label="Reject H0")
+            ax.axvline(actual_plot_crit, color="green", ls="--")
+            pdf_val = stats.t.pdf(actual_plot_crit, df)
+            if not np.isnan(pdf_val): place_label(ax, placed_labels, actual_plot_crit, pdf_val + 0.02, f"tcrit={actual_plot_crit:.2f}", color="green")
         else: # two-tailed
-            plot_crit_val_two_sided = stats.t.ppf(1 - input_alpha / 2, df)
-            ax.fill_between(xs[xs >= plot_crit_val_two_sided], ys[xs >= plot_crit_val_two_sided], color="red", alpha=0.3)
-            ax.fill_between(xs[xs <= -plot_crit_val_two_sided], ys[xs <= -plot_crit_val_two_sided], color="red", alpha=0.3, label="Reject H0")
-            ax.axvline(plot_crit_val_two_sided, color="green", ls="--")
-            ax.axvline(-plot_crit_val_two_sided, color="green", ls="--")
-            pdf_val = stats.t.pdf(plot_crit_val_two_sided, df)
+            plot_crit_val = stats.t.ppf(1 - input_alpha / 2, df)
+            ax.fill_between(xs[xs >= plot_crit_val], ys[xs >= plot_crit_val], color="red", alpha=0.3)
+            ax.fill_between(xs[xs <= -plot_crit_val], ys[xs <= -plot_crit_val], color="red", alpha=0.3, label="Reject H0")
+            ax.axvline(plot_crit_val, color="green", ls="--"); ax.axvline(-plot_crit_val, color="green", ls="--")
+            pdf_val = stats.t.pdf(plot_crit_val, df)
             if not np.isnan(pdf_val):
-                place_label(ax, placed_labels, plot_crit_val_two_sided, pdf_val + 0.02, f"+tcrit={plot_crit_val_two_sided:.2f}", color="green")
-                place_label(ax, placed_labels, -plot_crit_val_two_sided, pdf_val + 0.02, f"–tcrit={plot_crit_val_two_sided:.2f}", color="green")
+                place_label(ax, placed_labels, plot_crit_val, pdf_val + 0.02, f"+tcrit={plot_crit_val:.2f}", color="green")
+                place_label(ax, placed_labels, -plot_crit_val, pdf_val + 0.02, f"–tcrit={plot_crit_val:.2f}", color="green")
         
         pdf_at_t_calc = stats.t.pdf(t_calc, df)
         if not np.isnan(pdf_at_t_calc): place_label(ax, placed_labels, t_calc, pdf_at_t_calc + 0.02, f"tcalc={t_calc:.2f}", color="blue")
         ax.axvline(t_calc, color="blue", ls="--")
-    except Exception as e:
-        st.warning(f"Could not draw critical regions/labels on plot: {e}")
-
-    ax.set_xlabel("t")
-    ax.set_ylabel("Density")
-    ax.legend(loc='upper right')
-    ax.set_title(f"t-Distribution (df={df:.0f}, input $\\alpha$={input_alpha:.4f})") # Show input alpha
-    fig.tight_layout()
+    except Exception as e: st.warning(f"Could not draw plot elements: {e}")
+    ax.set_xlabel("t"); ax.set_ylabel("Density"); ax.legend(loc='upper right')
+    ax.set_title(f"t-Distribution (df={df:.0f}, input $\\alpha$={input_alpha:.4f})"); fig.tight_layout()
     return fig
 
-def build_t_html(df: int, user_input_alpha: float, tail: str) -> str: # user_input_alpha is for table highlighting logic
+def build_t_html(df: int, user_input_alpha: float, tail: str) -> str:
     rows = list(range(max(1, df - 5), df + 6))
     heads = [
         ("one", 0.10), ("one", 0.05), ("one", 0.01), ("one", 0.001),
         ("two", 0.10), ("two", 0.05), ("two", 0.01), ("two", 0.001)
     ]
     mode = "one" if tail.startswith("one") else "two"
-
-    col_idx_to_highlight = -1
-    best_match_info_for_table = None 
-    min_diff_for_table = float('inf')
-
+    col_idx_to_highlight = -1; best_match_info_for_table = None; min_diff_for_table = float('inf')
     for i, (h_mode, h_alpha_val) in enumerate(heads, start=1):
         if h_mode == mode:
             if np.isclose(h_alpha_val, user_input_alpha):
-                col_idx_to_highlight = i
-                best_match_info_for_table = {'alpha_val': h_alpha_val, 'is_exact': True, 'index': i}
-                break 
+                col_idx_to_highlight = i; best_match_info_for_table = {'alpha_val': h_alpha_val, 'is_exact': True, 'index': i}; break
             current_diff = abs(h_alpha_val - user_input_alpha)
             if current_diff < min_diff_for_table:
-                min_diff_for_table = current_diff
-                best_match_info_for_table = {'index': i, 'alpha_val': h_alpha_val, 'is_exact': False}
+                min_diff_for_table = current_diff; best_match_info_for_table = {'index': i, 'alpha_val': h_alpha_val, 'is_exact': False}
             elif current_diff == min_diff_for_table:
                 if best_match_info_for_table and h_alpha_val < best_match_info_for_table['alpha_val']:
                      best_match_info_for_table = {'index': i, 'alpha_val': h_alpha_val, 'is_exact': False}
-
     if col_idx_to_highlight == -1: 
         if best_match_info_for_table:
             col_idx_to_highlight = best_match_info_for_table['index']
             selected_alpha_for_table_highlight = best_match_info_for_table['alpha_val']
             if not best_match_info_for_table.get('is_exact', False): 
                  st.warning(
-                    f"The entered alpha ({user_input_alpha:.4f}) is not a standard value in this t-table for a {mode}-tailed test. "
-                    f"Highlighting the column for the closest standard alpha: {selected_alpha_for_table_highlight:.4f}."
+                    f"Entered $\\alpha$ ({user_input_alpha:.4f}) is not standard for {mode}-tailed. "
+                    f"Highlighting closest table $\\alpha$: {selected_alpha_for_table_highlight:.4f}."
                 )
         else:
-            st.error(f"Internal error: No columns found for mode '{mode}'. Defaulting to column 1 for highlighting.")
-            col_idx_to_highlight = 1 
-            if heads: st.info(f"Table highlight defaulted to col 1 (alpha={heads[0][1]:.3f} for mode='{heads[0][0]}').")
-
+            st.error(f"No columns for mode '{mode}'. Defaulting highlight to col 1."); col_idx_to_highlight = 1
+            if heads: st.info(f"Defaulted highlight (col 1: $\\alpha$={heads[0][1]:.3f} for mode='{heads[0][0]}').")
     if not (1 <= col_idx_to_highlight <= len(heads)):
-        st.warning(f"Invalid column index {col_idx_to_highlight} for table highlight. Resetting to 1.")
-        col_idx_to_highlight = 1
-    
-    head_html_parts = []
-    for m_h, a_h in heads:
-        head_html_parts.append(f"<th>{m_h}<br>$\\alpha$={a_h:.3f}</th>")
-    head_html = "".join(head_html_parts)
-    
+        st.warning(f"Invalid col index {col_idx_to_highlight}. Resetting to 1."); col_idx_to_highlight = 1
+    head_html_parts = [f"<th>{m_h}<br>$\\alpha$={a_h:.3f}</th>" for m_h, a_h in heads]; head_html = "".join(head_html_parts)
     body_html = ""
     for r_val in rows:
         row_cells = f'<td id="t_{r_val}_0">{r_val}</td>'
         for i_cell, (m_cell, a_cell) in enumerate(heads, start=1):
-            try:
-                crit_val_cell = stats.t.ppf(1 - a_cell if m_cell == "one" else 1 - a_cell / 2, r_val)
-                cell_text = f"{crit_val_cell:.3f}" # Using .3f for table values
+            try: crit_val_cell = stats.t.ppf(1 - a_cell if m_cell == "one" else 1 - a_cell / 2, r_val); cell_text = f"{crit_val_cell:.3f}"
             except Exception: cell_text = "N/A"
             row_cells += f'<td id="t_{r_val}_{i_cell}">{cell_text}</td>'
         body_html += f"<tr>{row_cells}</tr>"
-
-    table_code = f"<tr><th>df</th>{head_html}</tr>{body_html}"
-    html_output = wrap_table(CSS_BASE, table_code)
-
+    table_code = f"<tr><th>df</th>{head_html}</tr>{body_html}"; html_output = wrap_table(CSS_BASE, table_code)
     if df in rows:
-        for i_highlight in range(len(heads) + 1):
-            html_output = style_cell(html_output, f"t_{df}_{i_highlight}")
-    for rr_val in rows: # Highlight column based on col_idx_to_highlight
-        html_output = style_cell(html_output, f"t_{rr_val}_{col_idx_to_highlight}")
-    if df in rows:
-        html_output = style_cell(html_output, f"t_{df}_{col_idx_to_highlight}", color="blue", px=3)
-    
+        for i_highlight in range(len(heads) + 1): html_output = style_cell(html_output, f"t_{df}_{i_highlight}")
+    for rr_val in rows: html_output = style_cell(html_output, f"t_{rr_val}_{col_idx_to_highlight}")
+    if df in rows: html_output = style_cell(html_output, f"t_{df}_{col_idx_to_highlight}", color="blue", px=3)
     return html_output
 
 def t_table(df: int, user_input_alpha: float, tail: str):
     code = build_t_html(df, user_input_alpha, tail)
     st.markdown(container(code), unsafe_allow_html=True)
 
-def t_apa(t_val: float, df: int, input_alpha: float, tail: str): # Uses input_alpha for calculations
-    p_calc_val = np.nan
-    crit_val_from_input_alpha = np.nan # Critical value based on user's alpha
-    reject = False
-
+def t_apa(t_val: float, df: int, input_alpha: float, tail: str): # Uses input_alpha for calcs
+    p_calc_val, crit_val_apa, reject = np.nan, np.nan, False
     try:
         if tail.startswith("one"):
             p_calc_val = stats.t.sf(abs(t_val), df) 
-            crit_val_from_input_alpha = stats.t.ppf(1 - input_alpha, df) 
-            if t_val >= 0: 
-                reject = t_val > crit_val_from_input_alpha
-            else: 
-                reject = t_val < -crit_val_from_input_alpha 
-        else: # two-tailed
+            crit_val_apa = stats.t.ppf(1 - input_alpha, df) 
+            if t_val >= 0: reject = t_val > crit_val_apa
+            else: reject = t_val < -crit_val_apa 
+        else:
             p_calc_val = stats.t.sf(abs(t_val), df) * 2
-            crit_val_from_input_alpha = stats.t.ppf(1 - input_alpha / 2, df)
-            reject = abs(t_val) > crit_val_from_input_alpha
-    except Exception as e:
-        st.warning(f"Could not calculate p-value or critical value for APA: {e}")
-
+            crit_val_apa = stats.t.ppf(1 - input_alpha / 2, df)
+            reject = abs(t_val) > crit_val_apa
+    except Exception as e: st.warning(f"Could not calc t-APA details: {e}")
     decision = "rejected" if reject else "failed to reject"
     reason_stats = "because $t_{calc}$ was in the rejection region" if reject else "because $t_{calc}$ was not in the rejection region"
     reason_p = f"because $p \\approx {p_calc_val:.3f} < \\alpha$" if reject else f"because $p \\approx {p_calc_val:.3f} \\ge \\alpha$"
-    
-    cdf_val = np.nan
+    cdf_val = np.nan; 
     try: cdf_val = stats.t.cdf(t_val, df)
-    except Exception: pass
-
-    expl_parts = []
-    expl_parts.append(f"For $t_{{calc}} = {t_val:.2f}$ with $df = {df}$:")
+    except: pass
+    expl_parts = [f"For $t_{{calc}} = {t_val:.2f}$ with $df = {df}$ (using your input $\\alpha = {input_alpha:.4f}$):"]
     expl_parts.append(f"The cumulative probability $P(T \\le {t_val:.2f}) \\approx {cdf_val:.4f}$ (from t-distribution CDF).")
     if tail.startswith("one"):
-        if t_val >= 0: # Right tail
-            expl_parts.append(f"For a **one-tailed** (right tail) test, the p-value is $1 - P(T \\le {t_val:.2f}) \\approx {1-cdf_val:.4f}$.")
-        else: # Left tail
-            expl_parts.append(f"For a **one-tailed** (left tail) test, the p-value is $P(T \\le {t_val:.2f}) \\approx {cdf_val:.4f}$.")
-    else: # Two-tail
-        expl_parts.append(f"For a **two-tailed** test, the p-value is $2 \\times P(T \\ge |{t_val:.2f}|)$. Using the CDF, this is $2 \\times \\text{{min}}(P(T \\le {t_val:.2f}), 1 - P(T \\le {t_val:.2f})) \\approx {2*min(cdf_val, 1-cdf_val):.4f}$.")
-    expl_parts.append(f"The calculated p-value is $p \\approx {p_calc_val:.4f}$.")
-    
+        if t_val >= 0: expl_parts.append(f"For a **one-tailed** (right tail) test, the p-value is $1 - P(T \\le {t_val:.2f}) \\approx {1-cdf_val:.4f}$.")
+        else: expl_parts.append(f"For a **one-tailed** (left tail) test, the p-value is $P(T \\le {t_val:.2f}) \\approx {cdf_val:.4f}$.")
+    else: expl_parts.append(f"For a **two-tailed** test, the p-value is $2 \\times P(T \\ge |{t_val:.2f}|) \\approx {2*min(cdf_val, 1-cdf_val if not np.isnan(cdf_val) else 0.5):.4f}$.")
+    expl_parts.append(f"The calculated p-value (more directly) is $p \\approx {p_calc_val:.4f}$.")
     st.write("\n\n".join(expl_parts))
-
-    st.markdown( # Using original APA structure but with crit_val_from_input_alpha
+    st.markdown(
         "**APA interpretation**\n"
         f"Calculated statistic: *$t$({df}) = {t_val:.2f}, *$p$ $\\approx$ {p_calc_val:.3f}.\n"
-        f"Critical statistic for user's $\\alpha={input_alpha:.4f}$ ({tail}): $t_{{crit}} \\approx {crit_val_from_input_alpha:.2f}$.\n" # Using user's alpha for crit
-        f"Comparison of statistics ($t_{{calc}}$ vs $t_{{crit}}$ for $\\alpha={input_alpha:.4f}$) $\\rightarrow$ H₀ **{decision}** ({reason_stats}).\n"
-        f"Comparison of *$p$*-values ($p$ vs $\\alpha={input_alpha:.4f}$) $\\rightarrow$ H₀ **{decision}** ({reason_p}).\n"
+        f"Critical statistic for your input $\\alpha={input_alpha:.4f}$ ({tail}): $t_{{crit}} \\approx {crit_val_apa:.2f}$.\n"
+        f"Comparison of statistics ($t_{{calc}}$ vs $t_{{crit}}$ for your $\\alpha$) $\\rightarrow$ H₀ **{decision}** ({reason_stats}).\n"
+        f"Comparison of *$p$*-values ($p$ vs your $\\alpha$) $\\rightarrow$ H₀ **{decision}** ({reason_p}).\n"
         f"**APA 7 report:** *$t$({df}) = {t_val:.2f}, *$p$ $\\approx$ {p_calc_val:.3f} ({tail}). The null hypothesis was **{decision}** at $\\alpha$={input_alpha:.2f}."
     )
 
 def tab_t():
     st.subheader("Tab 1 • t-Distribution")
-    c1, c2 = st.columns(2)
-    with c1:
-        t_val_in = st.number_input("t statistic", value=2.10, step=0.01, key="t_val_widget")
-        df_in = st.number_input("df", min_value=1, value=10, step=1, key="t_df_widget")
-    with c2:
-        alpha_in = st.number_input("α (alpha level)", value=0.05, step=0.001, min_value=0.0001, max_value=0.99, format="%.4f", key="t_alpha_widget")
-        tail_in = st.radio("Tail", ["one-tailed", "two-tailed"], key="t_tail_widget", horizontal=True)
-
-    # Calculations are performed when the button is clicked or if inputs change and it's the first run
-    # For simplicity, let's use a button as in your original implied structure for some tabs
-    # Or, remove the button if you want it to update live (can be slow for complex plots/tables)
-
-    # To make it update without a button, call these directly:
-    # However, using a button can prevent excessive re-renders during typing.
-    # For now, retaining a similar flow to original screenshots which had an "Update Plot" button
-    
-    if 't_button_clicked' not in st.session_state: # Initialize if not exists
-        st.session_state.t_button_clicked = False
-
-    if st.button("Generate Plot and Table for t-Distribution", key="t_generate_button_main"):
-        st.session_state.t_button_clicked = True
-
-    if st.session_state.t_button_clicked : # Only draw if button was clicked
+    c1,c2=st.columns(2);
+    with c1: t_val_in=st.number_input("t statistic",value=2.10,step=0.01,key="t_val_w"); df_in=st.number_input("df",min_value=1,value=10,step=1,key="t_df_w")
+    with c2: alpha_in=st.number_input("Your $\\alpha$ (alpha level)",value=0.05,step=0.001,min_value=0.0001,max_value=0.99,format="%.4f",key="t_alpha_w"); tail_in=st.radio("Tail",["one-tailed","two-tailed"],key="t_tail_w",horizontal=True)
+    # Using a session state for button to persist its effect after interaction with other widgets
+    if 't_show_results' not in st.session_state: st.session_state.t_show_results = False
+    if st.button("Generate Plot, Table & APA for t-Distribution", key="t_generate_w"): st.session_state.t_show_results = True
+    if st.session_state.t_show_results:
         try:
-            # Pass user's alpha_in to plot_t and t_apa for their critical value calculations
-            fig_t_dist = plot_t(float(t_val_in), int(df_in), float(alpha_in), tail_in)
-            if fig_t_dist: st.pyplot(fig_t_dist)
-        except Exception as e:
-            st.error(f"Error generating t-plot: {e}")
+            fig_t = plot_t(float(t_val_in), int(df_in), float(alpha_in), tail_in)
+            if fig_t: st.pyplot(fig_t)
+        except Exception as e: st.error(f"Plot error: {e}")
+        st.write(f"**t-table** (Column highlight for table's closest $\\alpha$ to your input $\\alpha$={alpha_in:.4f})")
+        ct_t,ce_t=st.columns([3,2])
+        with ct_t:
+            try: t_table(int(df_in),float(alpha_in),tail_in); show_cumulative_note()
+            except Exception as e: st.error(f"Table error: {e}"); st.exception(e)
+        with ce_t:
+            try: st.subheader("P-value Calculation Explanation"); t_apa(float(t_val_in),int(df_in),float(alpha_in),tail_in)
+            except Exception as e: st.error(f"APA error: {e}")
 
-        st.write("**t-table** (highlighted based on input α, showing standard α columns)")
-        ctable_t, cexp_t = st.columns([3, 2]) 
-        with ctable_t:
-            try:
-                # Pass user's alpha_in to t_table for highlighting logic
-                t_table(int(df_in), float(alpha_in), tail_in)
-                show_cumulative_note()
-            except Exception as e:
-                st.error(f"Error generating t-table: {e}")
-                st.exception(e) 
-        with cexp_t:
-            try:
-                st.subheader("P-value Calculation Explanation")
-                # Pass user's alpha_in to t_apa for its critical value calculations
-                t_apa(float(t_val_in), int(df_in), float(alpha_in), tail_in)
-            except Exception as e:
-                st.error(f"Error in t-APA explanation: {e}")
-
-# ----- Z-Distribution (Restoring original structure, ensuring consistency) -----
+# ----- Z-Distribution -----
 def plot_z(z_calc, input_alpha, tail):
-    fig, ax = plt.subplots(figsize=(12,4), dpi=100)
-    xs = np.linspace(-4,4,400)
-    ys = stats.norm.pdf(xs)
-    ax.plot(xs, ys, "k")
-    ax.fill_between(xs, ys, color="lightgrey", alpha=0.25, label="Fail to Reject H0")
-    placed_z = []
+    fig, ax = plt.subplots(figsize=(12,4), dpi=100); xs = np.linspace(-4,4,400); ys = stats.norm.pdf(xs)
+    ax.plot(xs, ys, "k"); ax.fill_between(xs, ys, color="lightgrey", alpha=0.25, label="Fail to Reject H0"); placed_z = []
     try:
         if tail.startswith("one"):
-            plot_crit_z_one = stats.norm.ppf(1 - input_alpha)
-            if z_calc >= 0:
-                ax.fill_between(xs[xs>=plot_crit_z_one], ys[xs>=plot_crit_z_one], color="red", alpha=0.3, label="Reject H0")
-                ax.axvline(plot_crit_z_one, color="green", ls="--")
-                place_label(ax, placed_z, plot_crit_z_one, stats.norm.pdf(plot_crit_z_one)+0.02, f"z₍crit₎={plot_crit_z_one:.2f}", color="green")
-            else:
-                plot_crit_z_one_neg = -plot_crit_z_one
-                ax.fill_between(xs[xs<=plot_crit_z_one_neg], ys[xs<=plot_crit_z_one_neg], color="red", alpha=0.3, label="Reject H0")
-                ax.axvline(plot_crit_z_one_neg, color="green", ls="--")
-                place_label(ax, placed_z, plot_crit_z_one_neg, stats.norm.pdf(plot_crit_z_one_neg)+0.02, f"z₍crit₎={plot_crit_z_one_neg:.2f}", color="green")
-        else: # two-tailed
-            plot_crit_z_two = stats.norm.ppf(1 - input_alpha/2)
-            ax.fill_between(xs[xs>=plot_crit_z_two], ys[xs>=plot_crit_z_two], color="red", alpha=0.3)
-            ax.fill_between(xs[xs<=-plot_crit_z_two], ys[xs<=-plot_crit_z_two], color="red", alpha=0.3, label="Reject H0")
-            ax.axvline(plot_crit_z_two, color="green", ls="--")
-            ax.axvline(-plot_crit_z_two, color="green", ls="--")
-            place_label(ax, placed_z, plot_crit_z_two, stats.norm.pdf(plot_crit_z_two)+0.02, f"+z₍crit₎={plot_crit_z_two:.2f}", color="green")
-            place_label(ax, placed_z, -plot_crit_z_two, stats.norm.pdf(-plot_crit_z_two)+0.02, f"–z₍crit₎={plot_crit_z_two:.2f}", color="green")
-        ax.axvline(z_calc, color="blue", ls="--")
-        place_label(ax, placed_z, z_calc, stats.norm.pdf(z_calc)+0.02, f"z₍calc₎={z_calc:.2f}", color="blue")
-    except Exception as e: st.warning(f"Could not draw z-plot elements: {e}")
-    ax.set_xlabel("z")
-    ax.set_ylabel("Density")
-    ax.legend(loc='upper right')
-    ax.set_title(f"z-Distribution (input $\\alpha$={input_alpha:.4f})")
-    fig.tight_layout()
-    return fig
-
-def build_z_html(z_val: float) -> str: # z-table structure is independent of alpha
-    z_val_clipped = np.clip(z_val, -3.499, 3.499)
-    row_label = np.sign(z_val_clipped) * np.floor(abs(z_val_clipped) * 10) / 10
-    col_label = round(abs(z_val_clipped) - abs(row_label), 2)
-    TableRows = np.round(np.arange(-3.4, 3.5, 0.1), 1)
-    TableCols = np.round(np.arange(0.00, 0.10, 0.01), 2)
-    row_label = min(TableRows, key=lambda r_disp: abs(r_disp - row_label))
-    col_label = min(TableCols, key=lambda c_disp: abs(c_disp - col_label))
-    try: center_row_idx_in_table = list(TableRows).index(row_label)
-    except ValueError: center_row_idx_in_table = len(TableRows) // 2
-    display_row_start_idx = max(0, center_row_idx_in_table - 10)
-    display_row_end_idx = min(len(TableRows), center_row_idx_in_table + 11)
-    rows_to_show_in_html = TableRows[display_row_start_idx:display_row_end_idx]
-    head_html = "".join(f"<th>{c_head:.2f}</th>" for c_head in TableCols)
-    body_html = ""
-    for rr_html in rows_to_show_in_html:
-        row_html_cells = f'<td id="z_{rr_html:.1f}_0">{rr_html:.1f}</td>'
-        for cc_html in TableCols:
-            current_z_for_cell = rr_html + cc_html
-            cdf_cell_val = stats.norm.cdf(current_z_for_cell)
-            row_html_cells += f'<td id="z_{rr_html:.1f}_{cc_html:.2f}">{cdf_cell_val:.4f}</td>'
-        body_html += f"<tr>{row_html_cells}</tr>"
-    table_code = f"<tr><th>z</th>{head_html}</tr>{body_html}"
-    html_output = wrap_table(CSS_BASE, table_code)
-    if row_label in rows_to_show_in_html:
-        for cc_highlight in TableCols: html_output = style_cell(html_output, f"z_{row_label:.1f}_{cc_highlight:.2f}")
-        html_output = style_cell(html_output, f"z_{row_label:.1f}_0")
-        for rr_highlight in rows_to_show_in_html: html_output = style_cell(html_output, f"z_{rr_highlight:.1f}_{col_label:.2f}")
-        html_output = style_cell(html_output, f"z_{row_label:.1f}_{col_label:.2f}", color="blue", px=3)
-    return html_output
-
-def z_table(z_val: float): # Alpha and tail are not needed for z-table display
-    code = build_z_html(z_val)
-    st.markdown(container(code), unsafe_allow_html=True)
-
-def z_apa(z_val: float, input_alpha: float, tail: str): # Using input_alpha
-    p_calc_val = np.nan; crit_val_z = np.nan; reject = False
-    try:
-        if tail.startswith("one"):
-            p_calc_val = stats.norm.sf(abs(z_val))
-            if z_val >= 0: crit_val_z = stats.norm.ppf(1 - input_alpha); reject = z_val > crit_val_z
-            else: crit_val_z = stats.norm.ppf(input_alpha); reject = z_val < crit_val_z
+            crit_z_plot = stats.norm.ppf(1 - input_alpha) if z_calc >=0 else stats.norm.ppf(input_alpha)
+            region_z = xs[xs >= crit_z_plot] if z_calc >=0 else xs[xs <= crit_z_plot]
+            ax.fill_between(region_z, ys[np.isin(xs,region_z)], color="red", alpha=0.3, label="Reject H0")
+            ax.axvline(crit_z_plot, color="green", ls="--"); place_label(ax,placed_z,crit_z_plot,stats.norm.pdf(crit_z_plot)+0.02,f"z₍crit₎={crit_z_plot:.2f}",color="green")
         else:
-            p_calc_val = stats.norm.sf(abs(z_val)) * 2
-            crit_val_z = stats.norm.ppf(1 - input_alpha / 2)
-            reject = abs(z_val) > crit_val_z
-    except Exception as e: st.warning(f"Could not calc Z APA details: {e}")
-    decision = "rejected" if reject else "failed to reject"
-    reason_stats = f"because $|z_{{calc}}|$ ({abs(z_val):.2f}) {'exceeded' if reject else 'did not exceed'} $|z_{{crit}}|$ ({abs(crit_val_z):.2f})"
-    reason_p = f"because $p \\approx {p_calc_val:.3f} {'<' if reject else '≥'} \\alpha$"
-    table_val_cdf = np.nan
-    try: table_val_cdf = stats.norm.cdf(z_val)
-    except: pass
-    expl_parts_z = [f"Lookup $P(Z \\le {z_val:.2f}) \\approx {table_val_cdf:.4f}$ (from Z-table/CDF)."]
+            crit_z_plot = stats.norm.ppf(1 - input_alpha/2)
+            ax.fill_between(xs[xs>=crit_z_plot], ys[xs>=crit_z_plot],color="red",alpha=0.3); ax.fill_between(xs[xs<=-crit_z_plot],ys[xs<=-crit_z_plot],color="red",alpha=0.3,label="Reject H0")
+            ax.axvline(crit_z_plot,color="green",ls="--"); ax.axvline(-crit_z_plot,color="green",ls="--")
+            place_label(ax,placed_z,crit_z_plot,stats.norm.pdf(crit_z_plot)+0.02,f"+z₍crit₎={crit_z_plot:.2f}",color="green"); place_label(ax,placed_z,-crit_z_plot,stats.norm.pdf(-crit_z_plot)+0.02,f"–z₍crit₎={crit_z_plot:.2f}",color="green")
+        ax.axvline(z_calc,color="blue",ls="--"); place_label(ax,placed_z,z_calc,stats.norm.pdf(z_calc)+0.02,f"z₍calc₎={z_calc:.2f}",color="blue")
+    except Exception as e: st.warning(f"Plot error: {e}")
+    ax.set_xlabel("z"); ax.set_ylabel("Density"); ax.legend(loc='upper right'); ax.set_title(f"z-Distribution (input $\\alpha$={input_alpha:.4f})"); fig.tight_layout(); return fig
+
+def build_z_html(z_val: float) -> str:
+    z_clip = np.clip(z_val, -3.499, 3.499); row_lbl = np.sign(z_clip)*np.floor(abs(z_clip)*10)/10; col_lbl = round(abs(z_clip)-abs(row_lbl),2)
+    TRows,TCols = np.round(np.arange(-3.4,3.5,0.1),1),np.round(np.arange(0.00,0.10,0.01),2)
+    row_lbl = min(TRows,key=lambda r:abs(r-row_lbl)); col_lbl = min(TCols,key=lambda c:abs(c-col_lbl))
+    try: c_row_idx = list(TRows).index(row_lbl)
+    except ValueError: c_row_idx = len(TRows)//2
+    s_rows = TRows[max(0,c_row_idx-10):min(len(TRows),c_row_idx+11)]
+    h_html="".join(f"<th>{c:.2f}</th>" for c in TCols); b_html=""
+    for rr_h in s_rows:
+        r_cells=f'<td id="z_{rr_h:.1f}_0">{rr_h:.1f}</td>'
+        for cc_h in TCols: r_cells+=f'<td id="z_{rr_h:.1f}_{cc_h:.2f}">{stats.norm.cdf(rr_h+cc_h):.4f}</td>'
+        b_html+=f"<tr>{r_cells}</tr>"
+    t_code=f"<tr><th>z</th>{h_html}</tr>{b_html}"; html_o=wrap_table(CSS_BASE,t_code)
+    if row_lbl in s_rows:
+        for cc_hl in TCols: html_o=style_cell(html_o,f"z_{row_lbl:.1f}_{cc_hl:.2f}")
+        html_o=style_cell(html_o,f"z_{row_lbl:.1f}_0")
+        for rr_hl in s_rows: html_o=style_cell(html_o,f"z_{rr_hl:.1f}_{col_lbl:.2f}")
+        html_o=style_cell(html_o,f"z_{row_lbl:.1f}_{col_lbl:.2f}",color="blue",px=3)
+    return html_o
+
+def z_table(z_val: float): code=build_z_html(z_val); st.markdown(container(code),unsafe_allow_html=True)
+
+def z_apa(z_val: float, input_alpha: float, tail: str):
+    p_c,crit_z,rej = np.nan,np.nan,False
+    try:
+        if tail.startswith("one"): p_c=stats.norm.sf(abs(z_val)); crit_z=stats.norm.ppf(1-input_alpha) if z_val>=0 else stats.norm.ppf(input_alpha); rej= (z_val>crit_z if z_val>=0 else z_val<crit_z)
+        else: p_c=stats.norm.sf(abs(z_val))*2; crit_z=stats.norm.ppf(1-input_alpha/2); rej=abs(z_val)>crit_z
+    except Exception as e:st.warning(f"Z APA calc error: {e}")
+    dec="rejected" if rej else "failed to reject"; rs=f"$|z_{{calc}}|$ ({abs(z_val):.2f}) {'exceeded' if rej else 'not exceed'} $|z_{{crit}}|$ ({abs(crit_z):.2f})"; rp=f"$p \\approx {p_c:.3f} {'<' if rej else '≥'} \\alpha$"
+    cdf_z=np.nan; try: cdf_z=stats.norm.cdf(z_val)
+    except:pass
+    expl_z=[f"For $z_{{calc}} = {z_val:.2f}$ (using your input $\\alpha = {input_alpha:.4f}$):", f"Lookup $P(Z \\le {z_val:.2f}) \\approx {cdf_z:.4f}$ (from Z-table/CDF)."]
     if tail.startswith("one"):
-        if z_val >= 0: expl_parts_z.append(f"For **one-tailed** (right tail), $p = 1 - P(Z \\le {z_val:.2f}) \\approx {1-table_val_cdf:.4f}$.")
-        else: expl_parts_z.append(f"For **one-tailed** (left tail), $p = P(Z \\le {z_val:.2f}) \\approx {table_val_cdf:.4f}$.")
-    else: expl_parts_z.append(f"For **two-tailed**, $p = 2 \\times P(Z \\ge |{z_val:.2f}|) \\approx {2*min(table_val_cdf, 1-table_val_cdf):.4f}$.")
-    expl_parts_z.append(f"Calculated $p \\approx {p_calc_val:.4f}$.")
-    st.write("\n\n".join(expl_parts_z))
-    st.markdown(
-        "**APA interpretation**\n"
-        f"Calculated statistic: *$z$* = {z_val:.2f}, *$p$ $\\approx$ {p_calc_val:.3f}.\n"
-        f"Critical statistic for user's $\\alpha={input_alpha:.4f}$ ({tail}): $z_{{crit}} \\approx {crit_val_z:.2f}$.\n"
-        f"Statistic comparison $\\rightarrow$ H₀ **{decision}** ({reason_stats}).\n"
-        f"*$p$* comparison $\\rightarrow$ H₀ **{decision}** ({reason_p}).\n"
-        f"**APA 7 report:** *$z$* = {z_val:.2f}, *$p$ $\\approx$ {p_calc_val:.3f} ({tail}). Null hypothesis was **{decision}** at $\\alpha$={input_alpha:.2f}."
-    )
+        if z_val >=0: expl_z.append(f"For **one-tailed** (right tail), $p = 1 - P(Z \\le {z_val:.2f}) \\approx {1-cdf_z:.4f}$.")
+        else: expl_z.append(f"For **one-tailed** (left tail), $p = P(Z \\le {z_val:.2f}) \\approx {cdf_z:.4f}$.")
+    else: expl_z.append(f"For **two-tailed**, $p = 2 \\times P(Z \\ge |{z_val:.2f}|) \\approx {2*min(cdf_z, 1-cdf_z if not np.isnan(cdf_z) else 0.5):.4f}$.")
+    expl_z.append(f"Calculated $p \\approx {p_c:.4f}$.")
+    st.write("\n\n".join(expl_z))
+    st.markdown(f"**APA interpretation**\nCalculated statistic: *$z$*={z_val:.2f}, *$p$ $\\approx$ {p_c:.3f}.\nCritical statistic for your $\\alpha$={input_alpha:.4f} ({tail}): $z_{{crit}} \\approx {crit_z:.2f}.\nStatistic comp. $\\rightarrow$ H₀ **{dec}** ({rs}).\n*$p$* comp. $\\rightarrow$ H₀ **{dec}** ({rp}).\n**APA 7:** *$z$*={z_val:.2f}, *$p$ $\\approx$ {p_c:.3f} ({tail}). Null hypothesis was **{dec}** at $\\alpha$={input_alpha:.2f}.")
 
 def tab_z():
-    st.subheader("Tab 2 • z-Distribution")
-    c1, c2 = st.columns(2)
-    with c1: z_val_in = st.number_input("z statistic", value=1.64, step=0.01, key="z_val_widget")
-    with c2:
-        alpha_in = st.number_input("α (alpha level)", value=0.05, step=0.001, min_value=0.0001, max_value=0.99, format="%.4f", key="z_alpha_widget")
-        tail_in = st.radio("Tail", ["one-tailed", "two-tailed"], key="z_tail_widget", horizontal=True)
-    if 'z_button_clicked' not in st.session_state: st.session_state.z_button_clicked = False
-    if st.button("Generate Plot and Table for z-Distribution", key="z_generate_button_main"):
-        st.session_state.z_button_clicked = True
-    if st.session_state.z_button_clicked:
-        try:
-            fig_z = plot_z(float(z_val_in), float(alpha_in), tail_in)
-            if fig_z: st.pyplot(fig_z)
-        except Exception as e: st.error(f"Error generating z-plot: {e}")
-        st.write("**z-table** (highlighted based on z-statistic)")
-        ct_z, ce_z = st.columns([3, 2])
+    st.subheader("Tab 2 • z-Distribution"); c1,c2=st.columns(2)
+    with c1: z_val_in = st.number_input("z statistic",value=1.64,step=0.01,key="z_val_w")
+    with c2: alpha_in=st.number_input("Your $\\alpha$",value=0.05,step=0.001,min_value=0.0001,max_value=0.99,format="%.4f",key="z_alpha_w"); tail_in=st.radio("Tail",["one-tailed","two-tailed"],key="z_tail_w",horizontal=True)
+    if 'z_show_results' not in st.session_state: st.session_state.z_show_results = False
+    if st.button("Generate Plot, Table & APA for z-Distribution", key="z_generate_w"): st.session_state.z_show_results = True
+    if st.session_state.z_show_results:
+        try: fig_z=plot_z(float(z_val_in),float(alpha_in),tail_in);
+             if fig_z:st.pyplot(fig_z)
+        except Exception as e:st.error(f"Z-Plot error: {e}")
+        st.write("**z-table** (highlighted based on z-statistic value)")
+        ct_z,ce_z=st.columns([3,2])
         with ct_z:
-            try: z_table(float(z_val_in)); show_cumulative_note()
-            except Exception as e: st.error(f"Error for z-table: {e}"); st.exception(e)
+            try: z_table(float(z_val_in));show_cumulative_note()
+            except Exception as e:st.error(f"Z-Table error: {e}");st.exception(e)
         with ce_z:
-            try: st.subheader("P-value Calculation Explanation"); z_apa(float(z_val_in), float(alpha_in), tail_in)
-            except Exception as e: st.error(f"Error for z-APA: {e}")
+            try: st.subheader("P-value Calculation Explanation");z_apa(float(z_val_in),float(alpha_in),tail_in)
+            except Exception as e:st.error(f"Z-APA error: {e}")
 
-
-# ----- F-Distribution (Restoring original structure) -----
-def plot_f(f_calc, df1, df2, input_alpha): # Original plot_f, ensure input_alpha is used for crit
+# ----- F-Distribution -----
+# (Code largely as originally provided by user, with input_alpha used for plot/APA crit)
+def plot_f(f_calc, df1, df2, input_alpha):
     fig, ax = plt.subplots(figsize=(12,4), dpi=100)
-    if df1 <= 0 or df2 <= 0: ax.text(0.5,0.5, "df1 and df2 must be positive.", ha='center', va='center'); return fig
+    if df1 <= 0 or df2 <= 0: ax.text(0.5,0.5, "df1, df2 must be > 0.", ha='center', va='center'); return fig
     try:
-        crit_val_f_plot = stats.f.ppf(1 - input_alpha, df1, df2)
-        plot_upper_x = max(f_calc, crit_val_f_plot, 5) * 1.5 # Dynamic upper limit
-        if stats.f.ppf(0.999, df1, df2) < plot_upper_x : plot_upper_x = stats.f.ppf(0.999, df1, df2) * 1.1
+        crit_f_plot = stats.f.ppf(1 - input_alpha, df1, df2)
+        ux = max(f_calc, crit_f_plot, 5)*1.5; ppf_ux = stats.f.ppf(0.999,df1,df2); ux = ppf_ux*1.1 if not np.isnan(ppf_ux) and ppf_ux < ux else ux
+        xs=np.linspace(0,ux,400); ys=stats.f.pdf(xs,df1,df2); v=(~np.isnan(ys)&~np.isinf(ys)); xs,ys=xs[v],ys[v]
+        if len(xs)<2: ax.text(0.5,0.5,"Cannot generate F-PDF.",ha='center',va='center'); return fig
+        ax.plot(xs,ys,"k"); ax.fill_between(xs,ys,color="lightgrey",alpha=0.25,label="Fail to Reject H0")
+        ax.fill_between(xs[xs>=crit_f_plot],ys[xs>=crit_f_plot],color="red",alpha=0.3,label="Reject H0")
+        ax.axvline(crit_f_plot,color="green",ls="--"); ax.axvline(f_calc,color="blue",ls="--")
+        pf=[]; pdf_c=stats.f.pdf(crit_f_plot,df1,df2); pdf_f=stats.f.pdf(f_calc,df1,df2)
+        if not np.isnan(pdf_c):place_label(ax,pf,crit_f_plot,pdf_c+0.02,f"F₍crit₎={crit_f_plot:.2f}",color="green")
+        if not np.isnan(pdf_f):place_label(ax,pf,f_calc,pdf_f+0.02,f"F₍calc₎={f_calc:.2f}",color="blue")
+    except Exception as e: st.warning(f"F-Plot elements error: {e}")
+    ax.set_xlabel("F");ax.set_ylabel("Density");ax.legend(loc='upper right');ax.set_title(f"F-Dist (df1={df1:.0f},df2={df2:.0f}, input $\\alpha$={input_alpha:.4f})");fig.tight_layout();return fig
 
-        xs = np.linspace(0, plot_upper_x, 400)
-        ys = stats.f.pdf(xs, df1, df2)
-        valid_ys = ~np.isnan(ys) & ~np.isinf(ys); xs, ys = xs[valid_ys], ys[valid_ys]
-        if len(xs) < 2: ax.text(0.5,0.5, "Cannot generate F-PDF.", ha='center', va='center'); return fig
-        ax.plot(xs, ys, "k"); ax.fill_between(xs, ys, color="lightgrey", alpha=0.25, label="Fail to Reject H0")
-        ax.fill_between(xs[xs>=crit_val_f_plot], ys[xs>=crit_val_f_plot], color="red", alpha=0.3, label="Reject H0")
-        ax.axvline(crit_val_f_plot, color="green", ls="--"); ax.axvline(f_calc, color="blue", ls="--")
-        placed_f = [] 
-        pdf_crit = stats.f.pdf(crit_val_f_plot, df1, df2); pdf_calc = stats.f.pdf(f_calc, df1, df2)
-        if not np.isnan(pdf_crit): place_label(ax, placed_f, crit_val_f_plot, pdf_crit + 0.02, f"F₍crit₎={crit_val_f_plot:.2f}", color="green")
-        if not np.isnan(pdf_calc): place_label(ax, placed_f, f_calc, pdf_calc + 0.02, f"F₍calc₎={f_calc:.2f}", color="blue")
-    except Exception as e: st.warning(f"Could not draw F-plot elements: {e}")
-    ax.set_xlabel("F"); ax.set_ylabel("Density"); ax.legend(loc='upper right')
-    ax.set_title(f"F-Distribution (df1={df1:.0f}, df2={df2:.0f}, input $\\alpha$={input_alpha:.4f})"); fig.tight_layout()
-    return fig
+def build_f_table(df1: int, df2: int, input_alpha: float) -> str: # Table values based on input_alpha
+    rs=list(range(max(1,df1-2),df1+3+1)); cs=list(range(max(1,df2-2),df2+3+1)); ci=-1
+    if df2 in cs: ci=cs.index(df2)+1
+    hd="".join(f"<th>{c}</th>" for c in cs); bd=""
+    for r in rs:
+        rc=f'<td id="f_{r}_0">{r}</td>'
+        for i,c_val in enumerate(cs,start=1):
+            v=np.nan; try: v=stats.f.ppf(1-input_alpha,r,c_val)
+            except:pass
+            rc+=f'<td id="f_{r}_{i}">{v:.2f if not np.isnan(v) else "N/A"}</td>'
+        bd+=f"<tr>{rc}</tr>"
+    cd=f"<tr><th>df1\\df2</th>{hd}</tr>{bd}"; ht=wrap_table(CSS_BASE,cd)
+    if df1 in rs:
+        for i in range(len(cs)+1): ht=style_cell(ht,f"f_{df1}_{i}")
+    if ci!=-1:
+        for r_rr in rs: ht=style_cell(ht,f"f_{r_rr}_{ci}")
+        if df1 in rs:ht=style_cell(ht,f"f_{df1}_{ci}",color="blue",px=3)
+    return ht
 
-def build_f_table(df1: int, df2: int, input_alpha: float) -> str: # F-table values depend on input_alpha
-    rows = list(range(max(1,df1-2), df1+3+1)) # Focused range
-    cols = list(range(max(1,df2-2), df2+3+1))
-    col_idx_hl = -1
-    if df2 in cols: col_idx_hl = cols.index(df2)+1
-    head_html = "".join(f"<th>{c}</th>" for c in cols)
-    body_html = ""
-    for r_f in rows:
-        row_cells_f = f'<td id="f_{r_f}_0">{r_f}</td>'
-        for i_f,c_f in enumerate(cols, start=1):
-            val_f = np.nan
-            try: val_f = stats.f.ppf(1 - input_alpha, r_f, c_f) # Table values are Fcrit for input_alpha
-            except: pass
-            row_cells_f += f'<td id="f_{r_f}_{i_f}">{val_f:.2f if not np.isnan(val_f) else "N/A"}</td>'
-        body_html += f"<tr>{row_cells_f}</tr>"
-    code = f"<tr><th>df1\\df2</th>{head_html}</tr>{body_html}"
-    html = wrap_table(CSS_BASE, code)
-    if df1 in rows:
-        for i in range(len(cols)+1): html = style_cell(html, f"f_{df1}_{i}")
-    if col_idx_hl != -1:
-        for rr_f in rows: html = style_cell(html, f"f_{rr_f}_{col_idx_hl}")
-        if df1 in rows: html = style_cell(html, f"f_{df1}_{col_idx_hl}", color="blue", px=3)
-    return html
+def f_table(df1: int, df2: int, input_alpha: float): code=build_f_table(df1,df2,input_alpha); st.markdown(container(code,height=300),unsafe_allow_html=True)
 
-def f_table(df1: int, df2: int, input_alpha: float):
-    code = build_f_table(df1, df2, input_alpha)
-    st.markdown(container(code, height=300), unsafe_allow_html=True)
-
-def f_apa(f_val: float, df1: int, df2: int, input_alpha: float): # Original f_apa restored
-    p_calc = stats.f.sf(f_val, df1, df2)
-    crit = stats.f.ppf(1 - input_alpha, df1, df2) # Critical value from input_alpha
-    reject = (f_val>crit)
-    decision = "rejected" if reject else "failed to reject"
-    reason_stats = ("because F₍calc₎ exceeded F₍crit₎"
-                    if reject else "because F₍calc₎ did not exceed F₍crit₎")
-    reason_p = ("because p < α" if reject else "because p ≥ α") # Original greek alpha
-
-    st.markdown(
-        "**APA interpretation** \n"
-        f"Calculated statistic: *F*({df1},{df2})={f_val:.2f}, *p*={p_calc:.3f}.\n"
-        f"Critical statistic for user's $\\alpha={input_alpha:.4f}$: F₍crit₎={crit:.2f}.\n" # Using input_alpha for crit label
-        f"Statistic comparison → H0 **{decision}** ({reason_stats}).\n"
-        f"*p* comparison → H0 **{decision}** ({reason_p}).\n"
-        f"**APA 7 report:** *F*({df1},{df2})={f_val:.2f}, *p*={p_calc:.3f}. "
-        f"The null hypothesis was **{decision}** at $\\alpha$={input_alpha:.2f}."
-    )
+def f_apa(f_val: float, df1: int, df2: int, input_alpha: float): # Original APA, uses input_alpha for crit
+    pc=stats.f.sf(f_val,df1,df2); cr=stats.f.ppf(1-input_alpha,df1,df2); rj=(f_val>cr)
+    dec="rejected" if rj else "failed to reject"
+    rs_f=("because F₍calc₎ exceeded F₍crit₎" if rj else "F₍calc₎ did not exceed F₍crit₎")
+    rp_f=("because p < α" if rj else "p ≥ α")
+    st.markdown(f"**APA interpretation**\nCalculated: *F*({df1},{df2})={f_val:.2f},*p*={pc:.3f}.\nCrit for your $\\alpha$={input_alpha:.4f}: F₍crit₎={cr:.2f}.\nStats $\\rightarrow$ H0 **{dec}** ({rs_f}).\n*$p$* $\\rightarrow$ H0 **{dec}** ({rp_f}).\n**APA 7:** *F*({df1},{df2})={f_val:.2f},*p*={pc:.3f}. Null **{dec}** at $\\alpha$={input_alpha:.2f}.")
 
 def tab_f():
-    st.subheader("Tab 3 • F-Distribution")
-    c1,c2=st.columns(2)
-    with c1:
-        f_val_in = st.number_input("F statistic", value=4.32, step=0.01, key="f_val_widget")
-        df1_in = st.number_input("df1 (numerator)", min_value=1, value=5, step=1, key="f_df1_widget")
-    with c2:
-        df2_in = st.number_input("df2 (denominator)", min_value=1, value=20, step=1, key="f_df2_widget")
-        alpha_in = st.number_input("α (alpha level)", value=0.05, step=0.001, min_value=0.0001, max_value=0.99, format="%.4f", key="f_alpha_widget")
-    if 'f_button_clicked' not in st.session_state: st.session_state.f_button_clicked = False
-    if st.button("Generate Plot and Table for F-Distribution", key="f_generate_button_main"):
-        st.session_state.f_button_clicked = True
-    if st.session_state.f_button_clicked:
-        try:
-            fig_f = plot_f(float(f_val_in), int(df1_in), int(df2_in), float(alpha_in))
-            if fig_f: st.pyplot(fig_f)
-        except Exception as e: st.error(f"Error generating F-plot: {e}")
-        st.write("**F-table** (Values are F-critical for your input α. Always one-tailed.)")
-        try:
-            f_table(int(df1_in), int(df2_in), float(alpha_in))
-            f_apa(float(f_val_in), int(df1_in), int(df2_in), float(alpha_in))
-        except Exception as e: st.error(f"Error for F-table/APA: {e}"); st.exception(e)
+    st.subheader("Tab 3 • F-Distribution");c1,c2=st.columns(2)
+    with c1: fv=st.number_input("F stat",value=4.32,step=0.01,key="f_v_w");d1=st.number_input("df1",min_value=1,value=5,step=1,key="f_d1_w")
+    with c2: d2=st.number_input("df2",min_value=1,value=20,step=1,key="f_d2_w");ai=st.number_input("Your $\\alpha$",value=0.05,step=0.001,min_value=0.0001,max_value=0.99,format="%.4f",key="f_ai_w")
+    if 'f_show_results' not in st.session_state: st.session_state.f_show_results = False
+    if st.button("Generate Plot, Table & APA for F-Distribution",key="f_gen_w"): st.session_state.f_show_results = True
+    if st.session_state.f_show_results:
+        try: figf=plot_f(float(fv),int(d1),int(d2),float(ai));
+             if figf:st.pyplot(figf)
+        except Exception as e:st.error(f"F-Plot error: {e}")
+        st.write("**F-table** (Values are F-crit for your $\\alpha$. Always one-tailed.)")
+        try: f_table(int(d1),int(d2),float(ai)); f_apa(float(fv),int(d1),int(d2),float(ai))
+        except Exception as e:st.error(f"F-Table/APA error: {e}");st.exception(e)
 
-
-# ----- Chi-Square Distribution (Restoring original structure) -----
-def plot_chi(chi_calc, df, input_alpha): # Original plot_chi, ensure input_alpha is used
-    fig, ax = plt.subplots(figsize=(12,4), dpi=100)
-    if df <= 0: ax.text(0.5,0.5, "df must be positive.", ha='center', va='center'); return fig
+# ----- Chi-Square -----
+# (Original code, input_alpha for plot/APA crit, select_alpha for table highlight)
+def plot_chi(chi_calc, df, input_alpha):
+    fig,ax=plt.subplots(figsize=(12,4),dpi=100)
+    if df<=0: ax.text(0.5,0.5,"df must be > 0.",ha='center',va='center'); return fig
     try:
-        crit_val_chi_plot = stats.chi2.ppf(1 - input_alpha, df)
-        plot_upper_x = max(chi_calc, crit_val_chi_plot, 10) * 1.5
-        if stats.chi2.ppf(0.999, df) < plot_upper_x : plot_upper_x = stats.chi2.ppf(0.999, df) * 1.1
-        xs = np.linspace(0, plot_upper_x, 400); ys = stats.chi2.pdf(xs, df)
-        valid_ys = ~np.isnan(ys) & ~np.isinf(ys); xs, ys = xs[valid_ys], ys[valid_ys]
-        if len(xs) < 2: ax.text(0.5,0.5, "Cannot generate Chi-PDF.", ha='center', va='center'); return fig
-        ax.plot(xs, ys, "k"); ax.fill_between(xs, ys, color="lightgrey", alpha=0.25, label="Fail to Reject H0")
-        ax.fill_between(xs[xs>=crit_val_chi_plot], ys[xs>=crit_val_chi_plot], color="red", alpha=0.3, label="Reject H0")
-        ax.axvline(crit_val_chi_plot, color="green", ls="--"); ax.axvline(chi_calc, color="blue", ls="--")
-        placed_c = []; pdf_crit_c = stats.chi2.pdf(crit_val_chi_plot, df); pdf_calc_c = stats.chi2.pdf(chi_calc, df)
-        if not np.isnan(pdf_crit_c): place_label(ax, placed_c, crit_val_chi_plot, pdf_crit_c + 0.02, f"χ²₍crit₎={crit_val_chi_plot:.2f}", color="green")
-        if not np.isnan(pdf_calc_c): place_label(ax, placed_c, chi_calc, pdf_calc_c + 0.02, f"χ²₍calc₎={chi_calc:.2f}", color="blue")
-    except Exception as e: st.warning(f"Could not draw Chi-plot elements: {e}")
-    ax.set_xlabel("χ²"); ax.set_ylabel("Density"); ax.legend(loc='upper right')
-    ax.set_title(f"χ²-Distribution (df={df:.0f}, input $\\alpha$={input_alpha:.4f})"); fig.tight_layout()
-    return fig
+        crit_c_plot=stats.chi2.ppf(1-input_alpha,df); ux_c=max(chi_calc,crit_c_plot,10)*1.5
+        ppf_ux_c=stats.chi2.ppf(0.999,df); ux_c=ppf_ux_c*1.1 if not np.isnan(ppf_ux_c) and ppf_ux_c<ux_c else ux_c
+        xs_c=np.linspace(0,ux_c,400); ys_c=stats.chi2.pdf(xs_c,df); v_c=(~np.isnan(ys_c)&~np.isinf(ys_c)); xs_c,ys_c=xs_c[v_c],ys_c[v_c]
+        if len(xs_c)<2: ax.text(0.5,0.5,"Cannot generate Chi-PDF.",ha='center',va='center'); return fig
+        ax.plot(xs_c,ys_c,"k"); ax.fill_between(xs_c,ys_c,color="lightgrey",alpha=0.25,label="Fail to Reject H0")
+        ax.fill_between(xs_c[xs_c>=crit_c_plot],ys_c[xs_c>=crit_c_plot],color="red",alpha=0.3,label="Reject H0")
+        ax.axvline(crit_c_plot,color="green",ls="--"); ax.axvline(chi_calc,color="blue",ls="--")
+        pc_l=[]; pdf_cc=stats.chi2.pdf(crit_c_plot,df); pdf_chc=stats.chi2.pdf(chi_calc,df)
+        if not np.isnan(pdf_cc):place_label(ax,pc_l,crit_c_plot,pdf_cc+0.02,f"χ²₍crit₎={crit_c_plot:.2f}",color="green")
+        if not np.isnan(pdf_chc):place_label(ax,pc_l,chi_calc,pdf_chc+0.02,f"χ²₍calc₎={chi_calc:.2f}",color="blue")
+    except Exception as e: st.warning(f"Chi-Plot elements error: {e}")
+    ax.set_xlabel("χ²");ax.set_ylabel("Density");ax.legend(loc='upper right');ax.set_title(f"χ²-Dist (df={df:.0f}, input $\\alpha$={input_alpha:.4f})");fig.tight_layout();return fig
 
-def build_chi_table(df: int, selected_alpha_from_selectbox: float) -> str: # Table uses alpha from selectbox
-    rows = list(range(max(1,df-2), df+3+1))
-    standard_alphas = [0.10,0.05,0.025,0.01,0.005,0.001] # Standard alphas for table display
-    col_idx_hl = -1
-    if selected_alpha_from_selectbox in standard_alphas:
-        col_idx_hl = standard_alphas.index(selected_alpha_from_selectbox)+1
-    else: # Should not happen if selectbox items match standard_alphas
-        min_diff_c = float('inf')
-        for i_c, std_a_c in enumerate(standard_alphas, start=1):
-            if abs(std_a_c - selected_alpha_from_selectbox) < min_diff_c:
-                min_diff_c = abs(std_a_c - selected_alpha_from_selectbox); col_idx_hl = i_c
-        if col_idx_hl !=-1 : st.warning(f"Alpha {selected_alpha_from_selectbox} for table highlight not exact, using closest {standard_alphas[col_idx_hl-1]}.")
-        else: col_idx_hl = 1
-            
-    head_html = "".join(f"<th>{a:.3f}</th>" for a in standard_alphas)
-    body_html = ""
-    for r_c in rows:
-        row_cells_c = f'<td id="chi_{r_c}_0">{r_c}</td>'
-        for i_c_cell,a_c_cell in enumerate(standard_alphas, start=1):
-            val_c = np.nan; 
-            try: val_c = stats.chi2.ppf(1 - a_c_cell, r_c)
+def build_chi_table(df: int, alpha_for_highlight: float) -> str:
+    rs_c=list(range(max(1,df-2),df+3+1)); std_as=[0.10,0.05,0.025,0.01,0.005,0.001]; ci_c=-1
+    if alpha_for_highlight in std_as: ci_c=std_as.index(alpha_for_highlight)+1
+    else: 
+        md_c=float('inf')
+        for i,sa in enumerate(std_as,start=1):
+            if abs(sa-alpha_for_highlight)<md_c: md_c=abs(sa-alpha_for_highlight); ci_c=i
+        if ci_c!=-1: st.warning(f"Table $\\alpha$ {alpha_for_highlight:.4f} not standard, highlighting closest: {std_as[ci_c-1]:.3f}.")
+        else: ci_c=1 # Should not happen if std_as not empty
+    hd_c="".join(f"<th>{a:.3f}</th>" for a in std_as);bd_c=""
+    for r in rs_c:
+        rc_c=f'<td id="chi_{r}_0">{r}</td>'
+        for i,ac in enumerate(std_as,start=1):
+            vc=np.nan; try: vc=stats.chi2.ppf(1-ac,r)
             except: pass
-            row_cells_c += f'<td id="chi_{r_c}_{i_c_cell}">{val_c:.2f if not np.isnan(val_c) else "N/A"}</td>'
-        body_html += f"<tr>{row_cells_c}</tr>"
-    code = f"<tr><th>df\\α</th>{head_html}</tr>{body_html}"
-    html = wrap_table(CSS_BASE, code)
-    if df in rows:
-        for i in range(len(standard_alphas)+1): html = style_cell(html, f"chi_{df}_{i}")
-    if col_idx_hl != -1:
-        for rr_c in rows: html = style_cell(html, f"chi_{rr_c}_{col_idx_hl}")
-        if df in rows: html = style_cell(html, f"chi_{df}_{col_idx_hl}", color="blue", px=3)
-    return html
+            rc_c+=f'<td id="chi_{r}_{i}">{vc:.2f if not np.isnan(vc) else "N/A"}</td>'
+        bd_c+=f"<tr>{rc_c}</tr>"
+    cdc=f"<tr><th>df\\α</th>{hd_c}</tr>{bd_c}";htc=wrap_table(CSS_BASE,cdc)
+    if df in rs_c:
+        for i in range(len(std_as)+1): htc=style_cell(htc,f"chi_{df}_{i}")
+    if ci_c!=-1:
+        for rr in rs_c:htc=style_cell(htc,f"chi_{rr}_{ci_c}")
+        if df in rs_c:htc=style_cell(htc,f"chi_{df}_{ci_c}",color="blue",px=3)
+    return htc
 
-def chi_table(df: int, alpha_from_selectbox: float):
-    code = build_chi_table(df, alpha_from_selectbox)
-    st.markdown(container(code, height=300), unsafe_allow_html=True)
+def chi_table(df: int, alpha_for_highlight: float): code=build_chi_table(df,alpha_for_highlight); st.markdown(container(code,height=300),unsafe_allow_html=True)
 
-def chi_apa(chi_val: float, df: int, input_alpha: float): # Original chi_apa, uses input_alpha for user's test
-    p_calc = stats.chi2.sf(chi_val, df)
-    crit = stats.chi2.ppf(1 - input_alpha, df) # Crit value from user's input_alpha
-    reject = (chi_val>crit)
-    decision = "rejected" if reject else "failed to reject"
-    reason_stats = "because χ²₍calc₎ exceeded χ²₍crit₎" if reject else "because χ²₍calc₎ did not exceed χ²₍crit₎"
-    reason_p = "because p < α" if reject else "because p ≥ α"
-
-    st.markdown(
-        "**APA interpretation** \n"
-        f"Calculated statistic: χ²({df})={chi_val:.2f}, *p*={p_calc:.3f}.\n"
-        f"Critical statistic for user's $\\alpha={input_alpha:.4f}$: χ²₍crit₎={crit:.2f}.\n"
-        f"Statistic comparison → H0 **{decision}** ({reason_stats}).\n"
-        f"*p* comparison → H0 **{decision}** ({reason_p}).\n"
-        f"**APA 7 report:** χ²({df})={chi_val:.2f}, *p*={p_calc:.3f}. "
-        f"The null hypothesis was **{decision}** at $\\alpha$={input_alpha:.2f}."
-    )
+def chi_apa(chi_val: float, df: int, input_alpha: float): # Original APA, uses input_alpha for crit
+    pc=stats.chi2.sf(chi_val,df); cr=stats.chi2.ppf(1-input_alpha,df); rj=(chi_val>cr)
+    dec="rejected" if rj else "failed to reject"; rs_c="χ²₍calc₎ exceeded χ²₍crit₎" if rj else "χ²₍calc₎ not exceed χ²₍crit₎"; rp_c="p < α" if rj else "p ≥ α"
+    st.markdown(f"**APA interpretation**\nCalc: χ²({df})={chi_val:.2f},*p*={pc:.3f}.\nCrit for your $\\alpha$={input_alpha:.4f}: χ²₍crit₎={cr:.2f}.\nStats $\\rightarrow$ H0 **{dec}** ({rs_c}).\n*$p$* $\\rightarrow$ H0 **{dec}** ({rp_c}).\n**APA 7:** χ²({df})={chi_val:.2f},*p*={pc:.3f}. Null **{dec}** at $\\alpha$={input_alpha:.2f}.")
 
 def tab_chi():
-    st.subheader("Tab 4 • Chi-Square Distribution")
-    c1,c2=st.columns(2)
-    with c1:
-        chi_val_in = st.number_input("χ² statistic", value=7.88, step=0.01, key="chi_val_widget")
-        df_in = st.number_input("df", min_value=1, value=3, step=1, key="chi_df_widget")
+    st.subheader("Tab 4 • Chi-Square Distribution");c1,c2=st.columns(2)
+    with c1: cv=st.number_input("χ² stat",value=7.88,step=0.01,key="c_v_w");dfi=st.number_input("df ",min_value=1,value=3,step=1,key="c_df_w")
     with c2:
-        # Alpha from selectbox for table consistency, but user might want arbitrary alpha for their test
-        alpha_options_for_table = [0.10, 0.05, 0.025, 0.01, 0.005, 0.001]
-        alpha_for_table_display = st.selectbox("Table's α for highlighting", alpha_options_for_table, index=1, key="chi_alpha_selectbox_widget",
-                                          help="Select an alpha to highlight in the table. Your test's alpha can be different.")
-        # Allow user to input their own alpha for calculation, separate from table display alpha
-        alpha_for_test_calc = st.number_input("Your test's α (alpha level)", value=0.05, step=0.001, 
-                                            min_value=0.0001, max_value=0.99, format="%.4f", key="chi_alpha_test_widget")
+        sa_c=[0.10,0.05,0.025,0.01,0.005,0.001]; afth=st.selectbox("Table's $\\alpha$ for highlight",sa_c,index=1,key="c_as_w")
+        aia=st.number_input("Your test's $\\alpha$",value=0.05,step=0.001,min_value=0.0001,max_value=0.99,format="%.4f",key="c_aia_w")
+    if 'chi_show_results' not in st.session_state: st.session_state.chi_show_results = False
+    if st.button("Generate Plot, Table & APA for Chi-Square",key="c_gen_w"): st.session_state.chi_show_results = True
+    if st.session_state.chi_show_results:
+        try: figc=plot_chi(float(cv),int(dfi),float(aia));
+             if figc:st.pyplot(figc)
+        except Exception as e:st.error(f"Chi-Plot error: {e}")
+        st.write(f"**χ²-table** (Cols show standard $\\alpha$'s. Highlight for table $\\alpha$={afth})")
+        try: chi_table(int(dfi),float(afth)); chi_apa(float(cv),int(dfi),float(aia))
+        except Exception as e:st.error(f"Chi-Table/APA error: {e}");st.exception(e)
 
-    if 'chi_button_clicked' not in st.session_state: st.session_state.chi_button_clicked = False
-    if st.button("Generate Plot and Table for Chi-Square", key="chi_generate_button_main"):
-        st.session_state.chi_button_clicked = True
-
-    if st.session_state.chi_button_clicked:
-        try: # Plot uses user's test alpha
-            fig_c = plot_chi(float(chi_val_in), int(df_in), float(alpha_for_test_calc))
-            if fig_c: st.pyplot(fig_c)
-        except Exception as e: st.error(f"Error for Chi-plot: {e}")
-        st.write(f"**χ²-table** (Table columns show standard α's. Column for selected table α={alpha_for_table_display} is highlighted.)")
-        try: # Table uses selectbox alpha for highlighting
-            chi_table(int(df_in), float(alpha_for_table_display))
-            # APA uses user's test alpha
-            chi_apa(float(chi_val_in), int(df_in), float(alpha_for_test_calc))
-        except Exception as e: st.error(f"Error for Chi-table/APA: {e}"); st.exception(e)
-
-# ----- Mann-Whitney U (Restoring original structure, revised APA template) -----
-def plot_u(u_calc, n1, n2, input_alpha, tail): # Uses input_alpha for plot crit
+# ----- Mann-Whitney U -----
+def plot_u(u_calc, n1, n2, input_alpha, tail):
     mu_u = n1*n2/2.0; sigma_u = np.sqrt(n1*n2*(n1+n2+1)/12.0)
     fig, ax = plt.subplots(figsize=(12,4), dpi=100)
     if sigma_u <= 1e-9: ax.text(0.5, 0.5, "Cannot plot U: Variance is zero.", ha='center', va='center'); return fig
-    plot_min_x = max(0, mu_u - 4.5 * sigma_u); plot_max_x = min(n1 * n2, mu_u + 4.5 * sigma_u)
-    if plot_min_x >= plot_max_x : plot_min_x = max(0, u_calc -1); plot_max_x = u_calc +1 ; if plot_min_x >=plot_max_x: plot_max_x=plot_min_x+2
+    
+    # Corrected line with SyntaxError:
+    plot_min_x = max(0, mu_u - 4.5 * sigma_u) 
+    plot_max_x = min(n1 * n2, mu_u + 4.5 * sigma_u) 
+    if plot_min_x >= plot_max_x : 
+        plot_min_x = max(0, u_calc - 3 * sigma_u -1) 
+        plot_max_x = u_calc + 3 * sigma_u + 1
+        if plot_min_x >= plot_max_x: # Nested if corrected
+             plot_max_x = plot_min_x + 2 
+
     xs = np.linspace(plot_min_x, plot_max_x, 400); ys = stats.norm.pdf(xs, mu_u, sigma_u)
     valid_ys_u = ~np.isnan(ys) & ~np.isinf(ys); xs, ys = xs[valid_ys_u], ys[valid_ys_u]
     if len(xs) < 2: ax.text(0.5,0.5, "Cannot generate U-PDF.", ha='center', va='center'); return fig
     ax.plot(xs, ys, "k"); ax.fill_between(xs, ys, color="lightgrey", alpha=0.25, label="Fail to Reject H0")
-    placed_u_plot = []; from math import floor, ceil
+    placed_u_p = []; from math import floor, ceil
     try:
         if tail.startswith("one"):
-            # Assuming U_calc is tested against appropriate tail based on its value vs mean for plotting
-            if u_calc <= mu_u: # Test U <= U_L
-                z_c_u = stats.norm.ppf(input_alpha); crit_u_p = floor(mu_u + z_c_u * sigma_u)
-                ax.fill_between(xs[xs <= crit_u_p], ys[xs <= crit_u_p], color="red", alpha=0.3, label="Reject H0")
-                ax.axvline(crit_u_p, color="green", ls="--"); 
-                if not np.isnan(stats.norm.pdf(crit_u_p, mu_u, sigma_u)): place_label(ax, placed_u_plot, crit_u_p, stats.norm.pdf(crit_u_p, mu_u, sigma_u) + 0.005, f"Ucrit L≈{crit_u_p}", color="green")
-            else: # Test U >= U_U (U_calc is large)
-                z_c_u = stats.norm.ppf(1-input_alpha); crit_u_p = ceil(mu_u + z_c_u * sigma_u)
-                ax.fill_between(xs[xs >= crit_u_p], ys[xs >= crit_u_p], color="red", alpha=0.3, label="Reject H0")
-                ax.axvline(crit_u_p, color="green", ls="--");
-                if not np.isnan(stats.norm.pdf(crit_u_p, mu_u, sigma_u)): place_label(ax, placed_u_plot, crit_u_p, stats.norm.pdf(crit_u_p, mu_u, sigma_u) + 0.005, f"Ucrit U≈{crit_u_p}", color="green")
+            if u_calc <= mu_u: 
+                zc=stats.norm.ppf(input_alpha); cu=floor(mu_u+zc*sigma_u); ax.fill_between(xs[xs<=cu],ys[xs<=cu],color="red",alpha=0.3,label="Reject H0"); ax.axvline(cu,color="green",ls="--")
+                if not np.isnan(stats.norm.pdf(cu,mu_u,sigma_u)): place_label(ax,placed_u_p,cu,stats.norm.pdf(cu,mu_u,sigma_u)+0.005,f"Ucrit L≈{cu}",color="green")
+            else: 
+                zc=stats.norm.ppf(1-input_alpha); cu=ceil(mu_u+zc*sigma_u); ax.fill_between(xs[xs>=cu],ys[xs>=cu],color="red",alpha=0.3,label="Reject H0"); ax.axvline(cu,color="green",ls="--")
+                if not np.isnan(stats.norm.pdf(cu,mu_u,sigma_u)): place_label(ax,placed_u_p,cu,stats.norm.pdf(cu,mu_u,sigma_u)+0.005,f"Ucrit U≈{cu}",color="green")
         else:
-            z_c_l_u = stats.norm.ppf(input_alpha / 2); crit_l_u_p = floor(mu_u + z_c_l_u * sigma_u)
-            z_c_u_u = stats.norm.ppf(1-input_alpha/2); crit_u_u_p = ceil(mu_u + z_c_u_u * sigma_u) # More direct for upper
-            ax.fill_between(xs[xs <= crit_l_u_p], ys[xs <= crit_l_u_p], color="red", alpha=0.3)
-            ax.fill_between(xs[xs >= crit_u_u_p], ys[xs >= crit_u_u_p], color="red", alpha=0.3, label="Reject H0")
-            ax.axvline(crit_l_u_p, color="green", ls="--"); ax.axvline(crit_u_u_p, color="green", ls="--")
-            if not np.isnan(stats.norm.pdf(crit_l_u_p, mu_u, sigma_u)): place_label(ax, placed_u_plot, crit_l_u_p, stats.norm.pdf(crit_l_u_p, mu_u, sigma_u) + 0.005, f"Ucrit L≈{crit_l_u_p}", color="green")
-            if not np.isnan(stats.norm.pdf(crit_u_u_p, mu_u, sigma_u)): place_label(ax, placed_u_plot, crit_u_u_p, stats.norm.pdf(crit_u_u_p, mu_u, sigma_u) + 0.005, f"Ucrit U≈{crit_u_u_p}", color="green")
-        pdf_ucalc = stats.norm.pdf(u_calc, mu_u, sigma_u)
-        if not np.isnan(pdf_ucalc): place_label(ax, placed_u_plot, u_calc, pdf_ucalc + 0.005, f"Ucalc={u_calc}", color="blue")
-        ax.axvline(u_calc, color="blue", ls="--")
-    except Exception as e: st.warning(f"Could not draw U-plot elements: {e}")
-    ax.set_xlabel("U (Normal Approx.)"); ax.set_ylabel("Approx. density"); ax.legend(loc='upper right')
-    ax.set_title(f"Mann-Whitney U (Approx. $n_1$={n1}, $n_2$={n2}, input $\\alpha$={input_alpha:.4f})"); fig.tight_layout()
-    return fig
+            zcl=stats.norm.ppf(input_alpha/2); cul=floor(mu_u+zcl*sigma_u)
+            zcu=stats.norm.ppf(1-input_alpha/2); cuu=ceil(mu_u+zcu*sigma_u)
+            ax.fill_between(xs[xs<=cul],ys[xs<=cul],color="red",alpha=0.3); ax.fill_between(xs[xs>=cuu],ys[xs>=cuu],color="red",alpha=0.3,label="Reject H0")
+            ax.axvline(cul,color="green",ls="--"); ax.axvline(cuu,color="green",ls="--")
+            if not np.isnan(stats.norm.pdf(cul,mu_u,sigma_u)): place_label(ax,placed_u_p,cul,stats.norm.pdf(cul,mu_u,sigma_u)+0.005,f"Ucrit L≈{cul}",color="green")
+            if not np.isnan(stats.norm.pdf(cuu,mu_u,sigma_u)): place_label(ax,placed_u_p,cuu,stats.norm.pdf(cuu,mu_u,sigma_u)+0.005,f"Ucrit U≈{cuu}",color="green")
+        pdf_uc=stats.norm.pdf(u_calc,mu_u,sigma_u)
+        if not np.isnan(pdf_uc):place_label(ax,placed_u_p,u_calc,pdf_uc+0.005,f"Ucalc={u_calc}",color="blue")
+        ax.axvline(u_calc,color="blue",ls="--")
+    except Exception as e: st.warning(f"U-Plot elements error: {e}")
+    ax.set_xlabel("U (Normal Approx.)");ax.set_ylabel("Approx. density");ax.legend(loc='upper right');ax.set_title(f"Mann-Whitney U (Approx. $n_1$={n1},$n_2$={n2}, input $\\alpha$={input_alpha:.4f})");fig.tight_layout();return fig
 
-def u_crit(n1:int, n2:int, input_alpha:float, tail:str)->any: # Original u_crit, table values based on input_alpha
-    mu_u = n1*n2/2.0; sigma_u = np.sqrt(n1*n2*(n1+n2+1)/12.0)
-    if sigma_u <= 1e-9: return np.nan
+def u_crit(n1:int, n2:int, input_alpha:float, tail:str)->any:
+    mu_u=n1*n2/2.0; sigma_u=np.sqrt(n1*n2*(n1+n2+1)/12.0)
+    if sigma_u<=1e-9: return np.nan
     from math import floor
-    # Returns the lower critical U value for the given alpha/tail
-    z_crit_for_table = stats.norm.ppf(input_alpha if tail.startswith("one") else input_alpha/2)
-    return int(floor(mu_u + z_crit_for_table*sigma_u))
+    z_crit_table=stats.norm.ppf(input_alpha if tail.startswith("one") else input_alpha/2)
+    return int(floor(mu_u+z_crit_table*sigma_u))
 
-def build_u_table(n1:int, n2:int, input_alpha:float, tail:str)->str: # Table values based on input_alpha
-    rows_u = list(range(max(2, n1 - 2), n1 + 3 + 1)); cols_u = list(range(max(2, n2 - 2), n2 + 3 + 1))
-    col_idx_u_hl = -1
-    if n2 in cols_u: col_idx_u_hl = cols_u.index(n2)+1
-    head_html_u = "".join(f"<th>$n_2$={c_u}</th>" for c_u in cols_u)
-    body_html_u = ""
-    for r_u in rows_u:
-        row_cells_u = f'<td id="u_{r_u}_0">$n_1$={r_u}</td>'
-        for i_u,c_u_cell in enumerate(cols_u, start=1):
-            val_u_cell = u_crit(r_u,c_u_cell,input_alpha,tail) # Lower critical U for this alpha
-            row_cells_u += f'<td id="u_{r_u}_{i_u}">{val_u_cell if not np.isnan(val_u_cell) else "N/A"}</td>'
-        body_html_u += f"<tr>{row_cells_u}</tr>"
-    code_u = f"<tr><th>$n_1 \\setminus n_2$</th>{head_html_u}</tr>{body_html_u}"
-    html_u = wrap_table(CSS_BASE, code_u)
-    if n1 in rows_u:
-        for i in range(len(cols_u)+1): html_u = style_cell(html_u, f"u_{n1}_{i}")
-    if col_idx_u_hl != -1:
-        for rr_u_h in rows_u: html_u = style_cell(html_u, f"u_{rr_u_h}_{col_idx_u_hl}")
-        if n1 in rows_u: html_u = style_cell(html_u, f"u_{n1}_{col_idx_u_hl}", color="blue", px=3)
-    return html_u
+def build_u_table(n1:int, n2:int, input_alpha:float, tail:str)->str:
+    rs_u=list(range(max(2,n1-2),n1+3+1)); cs_u=list(range(max(2,n2-2),n2+3+1)); ci_u=-1
+    if n2 in cs_u: ci_u=cs_u.index(n2)+1
+    hd_u="".join(f"<th>$n_2$={c}</th>" for c in cs_u);bd_u=""
+    for r in rs_u:
+        rc_u=f'<td id="u_{r}_0">$n_1$={r}</td>'
+        for i,c_val in enumerate(cs_u,start=1):
+            v_u=u_crit(r,c_val,input_alpha,tail); rc_u+=f'<td id="u_{r}_{i}">{v_u if not np.isnan(v_u) else "N/A"}</td>'
+        bd_u+=f"<tr>{rc_u}</tr>"
+    cde_u=f"<tr><th>$n_1 \\setminus n_2$</th>{hd_u}</tr>{bd_u}";ht_u=wrap_table(CSS_BASE,cde_u)
+    if n1 in rs_u:
+        for i in range(len(cs_u)+1):ht_u=style_cell(ht_u,f"u_{n1}_{i}")
+    if ci_u!=-1:
+        for rr_u in rs_u: ht_u=style_cell(ht_u,f"u_{rr_u}_{ci_u}")
+        if n1 in rs_u: ht_u=style_cell(ht_u,f"u_{n1}_{ci_u}",color="blue",px=3)
+    return ht_u
 
-def u_table(n1:int, n2:int, input_alpha:float, tail:str):
-    code = build_u_table(n1,n2,input_alpha,tail)
-    st.markdown(container(code, height=300), unsafe_allow_html=True)
+def u_table(n1:int, n2:int, input_alpha:float, tail:str): code=build_u_table(n1,n2,input_alpha,tail);st.markdown(container(code,height=300),unsafe_allow_html=True)
 
-def u_apa(u_val: int, n1: int, n2: int, input_alpha: float, tail: str): # Revised APA explanation template
-    mu_u = n1 * n2 / 2.0; sigma_u = np.sqrt(n1 * n2 * (n1 + n2 + 1) / 12.0)
-    z_approx_val, p_calc_u, crit_z_apa_u, reject_u = np.nan, np.nan, np.nan, False
-
-    if sigma_u > 1e-9:
-        u_corr = 0.5 if u_val < mu_u else (-0.5 if u_val > mu_u else 0)
-        z_approx_val = (u_val - mu_u + u_corr) / sigma_u
+def u_apa(u_val: int, n1: int, n2: int, input_alpha: float, tail: str): # Revised APA template for U
+    mu_u=n1*n2/2.0; sigma_u=np.sqrt(n1*n2*(n1+n2+1)/12.0)
+    za,pc_u,cr_za_u,rj_u = np.nan,np.nan,np.nan,False
+    if sigma_u>1e-9:
+        uc=0.5 if u_val<mu_u else (-0.5 if u_val>mu_u else 0); za=(u_val-mu_u+uc)/sigma_u
         if tail.startswith("one"):
-            p_calc_u = stats.norm.cdf(z_approx_val) if z_approx_val <=0 else stats.norm.sf(z_approx_val) # Match p to Z direction
-            crit_z_apa_u = stats.norm.ppf(input_alpha) if p_calc_u < 0.5 else stats.norm.ppf(1-input_alpha) # Match Z_crit to expected Z direction
-            reject_u = (z_approx_val < crit_z_apa_u) if p_calc_u < 0.5 else (z_approx_val > crit_z_apa_u)
-        else:
-            p_calc_u = 2 * stats.norm.sf(abs(z_approx_val))
-            crit_z_apa_u = stats.norm.ppf(1 - input_alpha / 2)
-            reject_u = abs(z_approx_val) > crit_z_apa_u
-    else: st.warning("Cannot calculate Z approx for U: σ=0.")
-
-    decision_u = "rejected" if reject_u else "failed to reject"
-    reason_stats_u = f"$Z_{{approx}}$ ({z_approx_val:.2f}) in rejection region (vs $Z_{{crit}} \\approx {crit_z_apa_u:.2f}$)" if reject_u else f"$Z_{{approx}}$ not in rejection region"
-    reason_p_u = f"$p \\approx {p_calc_u:.3f} < \\alpha$" if reject_u else f"$p \\approx {p_calc_u:.3f} \\ge \\alpha$"
+            pc_u=stats.norm.cdf(za) if za<=0 else stats.norm.sf(za)
+            cr_za_u=stats.norm.ppf(input_alpha) if pc_u<0.5 else stats.norm.ppf(1-input_alpha)
+            rj_u=(za<cr_za_u if pc_u<0.5 else za>cr_za_u)
+        else: pc_u=2*stats.norm.sf(abs(za)); cr_za_u=stats.norm.ppf(1-input_alpha/2); rj_u=abs(za)>cr_za_u
+    else: st.warning("Cannot calc Z approx for U: σ=0.")
+    dec_u="rejected" if rj_u else "failed to reject"; rs_u=f"$Z_{{approx}}$({za:.2f}) in rej. region (vs $Z_{{crit}} \\approx {cr_za_u:.2f}$)" if rj_u else f"$Z_{{approx}}$ not in rej. region"; rp_u=f"$p \\approx {pc_u:.3f} < \\alpha$" if rj_u else f"$p \\approx {pc_u:.3f} \\ge \\alpha$"
     
-    # P-Value Calculation Explanation part (template like t-test)
-    st.subheader("P-value Calculation Explanation (Normal Approx.)") # Added subheader here for consistency
-    expl_u_parts = [f"For $U_{{calc}} = {u_val}$ (with $n_1={n1}, n_2={n2}$):"]
+    # P-Value Calc Explanation
+    st.subheader("P-value Calculation Explanation (Normal Approx.)") # Consistent subheader
+    expl_u_list = [f"For $U_{{calc}} = {u_val}$ (with $n_1={n1}, n_2={n2}$, using your input $\\alpha = {input_alpha:.4f}$):"]
     if sigma_u > 1e-9:
-        expl_u_parts.append(f"Using Normal Approximation: $\\mu_U \\approx {mu_u:.2f}$, $\\sigma_U \\approx {sigma_u:.2f}$.")
-        expl_u_parts.append(f"The Z-statistic (with continuity correction) is $Z_{{approx}} \\approx {z_approx_val:.2f}$.")
-        cdf_of_z_approx = stats.norm.cdf(z_approx_val)
-        expl_u_parts.append(f"The cumulative probability $P(Z \\le Z_{{approx}}) \\approx {cdf_of_z_approx:.4f}$.")
+        expl_u_list.append(f"Using Normal Approximation: $\\mu_U \\approx {mu_u:.2f}$, $\\sigma_U \\approx {sigma_u:.2f}$.")
+        expl_u_list.append(f"The Z-statistic (with continuity correction) $Z_{{approx}} \\approx {za:.2f}$.")
+        cdf_za = stats.norm.cdf(za)
+        expl_u_list.append(f"The cumulative probability $P(Z \\le Z_{{approx}}) \\approx {cdf_za:.4f}$.")
         if tail.startswith("one"):
-            # Direction of p-value calculation explanation depends on direction of test implied by Z_approx
-            if z_approx_val <=0: # Test for U being small
-                 expl_u_parts.append(f"For a **one-tailed** test (e.g., testing if $U$ is significantly small), $p \\approx P(Z \\le Z_{{approx}}) \\approx {cdf_of_z_approx:.4f}$.")
-            else: # Test for U being large (or U_other being small)
-                 expl_u_parts.append(f"For a **one-tailed** test (e.g., testing if $U$ is significantly large), $p \\approx 1 - P(Z \\le Z_{{approx}}) \\approx {1-cdf_of_z_approx:.4f}$.")
-        else: # two-tailed
-            expl_u_parts.append(f"For a **two-tailed** test, $p \\approx 2 \\times P(Z \\ge |Z_{{approx}}|) \\approx {p_calc_u:.4f}$.")
-        expl_u_parts.append(f"The calculated p-value is $p \\approx {p_calc_u:.4f}$.")
-    else:
-        expl_u_parts.append("Cannot provide detailed explanation as $\\sigma_U$ is zero.")
-    st.write("\n\n".join(expl_u_parts))
+            if za <=0 : expl_u_list.append(f"For a **one-tailed** test (e.g., $U$ significantly small), $p \\approx P(Z \\le Z_{{approx}}) \\approx {cdf_za:.4f}$.")
+            else: expl_u_list.append(f"For a **one-tailed** test (e.g., $U$ significantly large), $p \\approx 1 - P(Z \\le Z_{{approx}}) \\approx {1-cdf_za:.4f}$.")
+        else: expl_u_list.append(f"For a **two-tailed** test, $p \\approx 2 \\times P(Z \\ge |Z_{{approx}}|) \\approx {pc_u:.4f}$.")
+        expl_u_list.append(f"The calculated p-value is $p \\approx {pc_u:.4f}$.")
+    else: expl_u_list.append("Cannot provide detailed explanation as $\\sigma_U$ is zero.")
+    st.write("\n\n".join(expl_u_list))
 
-    # APA Interpretation part (remains separate)
-    st.markdown( # Original markdown structure restored, using calculated values
-        "**APA interpretation (Normal Approximation for U)**\n"
-        f"Calculated Mann-Whitney U = {u_val}. With $n_1={n1}, n_2={n2}$, this yields an approximate Z-statistic (with continuity correction) $Z \\approx {z_approx_val:.2f}$, "
-        f"and an approximate *$p$* = {p_calc_u:.3f} ({tail}).\n"
-        f"The critical Z-value for user's $\\alpha={input_alpha:.4f}$ ({tail}) is $Z_{{crit}} \\approx {crit_z_apa_u:.2f}$.\n"
-        f"Based on comparison of Z-statistics: H₀ is **{decision_u}** ({reason_stats_u}).\n"
-        f"Based on comparison of p-value to alpha: H₀ is **{decision_u}** ({reason_p_u}).\n"
-        f"**APA 7 report (approximate):** A Mann-Whitney U test indicated that the null hypothesis was **{decision_u}**, "
-        f"U = {u_val}, Z $\\approx$ {z_approx_val:.2f}, *p* $\\approx$ {p_calc_u:.3f} ({tail}), at an alpha level of {input_alpha:.2f}."
-    )
+    # APA Interpretation
+    st.markdown(f"**APA interpretation (Normal Approximation for U)**\nU={u_val}, Z$\\approx${za:.2f}, approx. *$p$*={pc_u:.3f} ({tail}).\nCrit Z for your $\\alpha$={input_alpha:.4f} ({tail}): $Z_{{crit}} \\approx {cr_za_u:.2f}$.\nH₀ **{dec_u}** ({rs_u}) via Z.\nH₀ **{dec_u}** ({rp_u}) via p.\n**APA 7 (approx.):** Mann-Whitney U indicated null was **{dec_u}**, U={u_val}, Z$\\approx${za:.2f},*p*$\\approx${pc_u:.3f}({tail}), $\\alpha$={input_alpha:.2f}.")
 
 def tab_u():
-    st.subheader("Tab 5 • Mann-Whitney U Distribution")
-    c1_u, c2_u = st.columns(2)
-    with c1_u:
-        u_val_in = st.number_input("U statistic value", min_value=0, value=23, step=1, key="u_val_widget")
-        n1_in = st.number_input("n1 (sample 1 size)", min_value=1, value=8, step=1, key="u_n1_widget")
-    with c2_u:
-        n2_in = st.number_input("n2 (sample 2 size)", min_value=1, value=10, step=1, key="u_n2_widget")
-        alpha_in = st.number_input("α (alpha level) for U", value=0.05, step=0.001, min_value=0.0001, max_value=0.99, format="%.4f", key="u_alpha_widget")
-        tail_in = st.radio("Tail for U", ["one-tailed", "two-tailed"], key="u_tail_widget", horizontal=True)
-    if 'u_button_clicked' not in st.session_state: st.session_state.u_button_clicked = False
-    if st.button("Generate Plot and Table for Mann-Whitney U", key="u_generate_button_main"):
-        st.session_state.u_button_clicked = True
-    if st.session_state.u_button_clicked:
-        if int(n1_in) < 1 or int(n2_in) < 1: st.error("Sample sizes n1 and n2 must be at least 1.")
+    st.subheader("Tab 5 • Mann-Whitney U Distribution");c1,c2=st.columns(2)
+    with c1:u_v=st.number_input("U stat val",min_value=0,value=23,step=1,key="u_v_w");n1v=st.number_input("n1 (samp1)",min_value=1,value=8,step=1,key="u_n1_w")
+    with c2:n2v=st.number_input("n2 (samp2)",min_value=1,value=10,step=1,key="u_n2_w");aiv=st.number_input("Your $\\alpha$ for U",value=0.05,step=0.001,min_value=0.0001,max_value=0.99,format="%.4f",key="u_ai_w");tiv=st.radio("Tail for U",["one-tailed","two-tailed"],key="u_ti_w",horizontal=True)
+    if 'u_show_results' not in st.session_state: st.session_state.u_show_results = False
+    if st.button("Generate Plot, Table & APA for Mann-Whitney U",key="u_gen_w"): st.session_state.u_show_results = True
+    if st.session_state.u_show_results:
+        if int(n1v)<1 or int(n2v)<1:st.error("n1 and n2 must be >= 1.")
         else:
-            try:
-                fig_u = plot_u(int(u_val_in), int(n1_in), int(n2_in), float(alpha_in), tail_in)
-                if fig_u: st.pyplot(fig_u)
-            except Exception as e: st.error(f"Error for U-plot: {e}")
-            st.write("**U-table (Approx. Lower Critical U Values for your input α)**")
-            ct_u, ce_u = st.columns([3,2]) # Keep table and explanation separate
+            try: fig_u=plot_u(int(u_v),int(n1v),int(n2v),float(aiv),tiv);
+                 if fig_u:st.pyplot(fig_u)
+            except Exception as e:st.error(f"U-Plot error: {e}")
+            st.write("**U-table** (Approx. Lower Crit U's for your $\\alpha$)")
+            ct_u,ce_u=st.columns([3,2])
             with ct_u:
-                try:
-                    u_table(int(n1_in), int(n2_in), float(alpha_in), tail_in)
-                    st.info("U-table shows approx. lower critical U's for *your input α*. Reject H₀ if obs. U ≤ table U (for left-tail or corresponding two-tail test).")
-                except Exception as e: st.error(f"Error for U-table: {e}"); st.exception(e)
-            with ce_u: # This is where the P-value explanation and APA go.
-                try:
-                    # The u_apa function now contains the "P-value Calc Explanation" subheader
-                    u_apa(int(u_val_in), int(n1_in), int(n2_in), float(alpha_in), tail_in)
-                except Exception as e: st.error(f"Error for U-APA: {e}")
+                try: u_table(int(n1v),int(n2v),float(aiv),tiv); st.info("U-table shows approx. lower crit U's for *your input α*. Reject H₀ if obs. U ≤ table U (for appropriate tail).")
+                except Exception as e:st.error(f"U-Table error: {e}");st.exception(e)
+            with ce_u: # u_apa now contains the P-value explanation subheader
+                try: u_apa(int(u_v),int(n1v),int(n2v),float(aiv),tiv)
+                except Exception as e:st.error(f"U-APA error: {e}")
 
-def tab_wilcoxon_t():
-    st.subheader("Tab 6 • Wilcoxon Signed-Rank T")
-    st.write("Wilcoxon T functionality to be implemented.")
-def tab_binomial():
-    st.subheader("Tab 7 • Binomial Distribution")
-    st.write("Binomial functionality to be implemented.")
+def tab_wilcoxon_t(): st.subheader("Tab 6 • Wilcoxon Signed-Rank T"); st.write("Wilcoxon T functionality to be implemented.")
+def tab_binomial(): st.subheader("Tab 7 • Binomial Distribution"); st.write("Binomial functionality to be implemented.")
 
 def main():
-    st.set_page_config(layout="wide", page_title="Statistical Tables Explorer")
+    st.set_page_config(layout="wide",page_title="Statistical Tables Explorer")
     st.title("Oli's - Statistical Table Explorer")
-    tab_titles = ["t-Dist", "z-Dist", "F-Dist", "Chi-Square", "Mann-Whitney U", "Wilcoxon T", "Binomial"]
-    tabs = st.tabs(tab_titles)
-    with tabs[0]: tab_t()
-    with tabs[1]: tab_z()
-    with tabs[2]: tab_f()
-    with tabs[3]: tab_chi()
-    with tabs[4]: tab_u()
-    with tabs[5]: tab_wilcoxon_t()
-    with tabs[6]: tab_binomial()
+    tabs_list=["t-Dist","z-Dist","F-Dist","Chi-Square","Mann-Whitney U","Wilcoxon T","Binomial"]
+    tabs_created=st.tabs(tabs_list)
+    with tabs_created[0]: tab_t()
+    with tabs_created[1]: tab_z()
+    with tabs_created[2]: tab_f()
+    with tabs_created[3]: tab_chi()
+    with tabs_created[4]: tab_u()
+    with tabs_created[5]: tab_wilcoxon_t()
+    with tabs_created[6]: tab_binomial()
 
 if __name__ == "__main__":
     main()
